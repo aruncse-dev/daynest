@@ -6,6 +6,7 @@ import type { SetupAnswers, Suggestion } from '@/lib/suggest'
 import { getSetting, setSetting } from './actions'
 import { syncHabitReminder, syncTaskReminder } from './links'
 import type { Habit, Task } from './types'
+import { ROLES, type FamilyRole } from '@/lib/family'
 
 /** Create or rename the one profile on this phone. Returns its id. */
 export async function ensureProfile(name: string, avatar: string) {
@@ -116,4 +117,26 @@ export async function applySuggestions(chosen: Suggestion[], answers: SetupAnswe
   }
   await setSetting('setupAnswers', answers)
   return created
+}
+
+/** Add family members from the setup wizard (skips empty names and names that already exist). */
+export async function addMembers(drafts: { name: string; role: FamilyRole }[]) {
+  const existing = await db.profiles.filter((p) => !p.archivedAt).toArray()
+  let order = 1
+  for (const d of drafts) {
+    const name = d.name.trim()
+    if (!name || existing.some((p) => p.name.toLowerCase() === name.toLowerCase())) continue
+    const r = ROLES.find((x) => x.value === d.role)!
+    // stagger createdAt so members keep the order they were entered in
+    const at = new Date(Date.now() + order++).toISOString()
+    await db.profiles.add({
+      id: uuid(),
+      name,
+      avatar: r.avatar,
+      color: r.color,
+      role: d.role,
+      createdAt: at,
+      updatedAt: at,
+    })
+  }
 }

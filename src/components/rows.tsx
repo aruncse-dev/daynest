@@ -195,6 +195,7 @@ export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDat
               · <BellTag text={bell} />
             </span>
           )}
+          <OwnerTag profileId={event.profileId} />
         </small>
       </div>
     </button>

@@ -4,12 +4,18 @@ import type { LocalDate } from '@/lib/date'
 
 /** Transient UI state only. IndexedDB (Dexie) is the source of truth for data. */
 export type SheetState =
-  | { type: 'task'; task?: Task; defaults?: Partial<Task> }
+  | { type: 'task'; task?: Task; defaults?: Partial<Task>; remindBefore?: number }
   | { type: 'quickAdd' }
-  | { type: 'habit'; habit?: Habit; defaults?: Partial<Habit> }
+  | { type: 'habit'; habit?: Habit; defaults?: Partial<Habit>; remindTimes?: string[] }
   | { type: 'habitDetail'; habitId: string }
-  | { type: 'event'; event?: CalendarEvent; date?: LocalDate }
-  | { type: 'profile'; profile?: Profile }
+  | {
+      type: 'event'
+      event?: CalendarEvent
+      date?: LocalDate
+      defaults?: Partial<CalendarEvent>
+      remindBefore?: number
+    }
+  | { type: 'profile'; profile?: Profile; role?: string }
   | { type: 'reminder'; reminder?: Reminder }
   | { type: 'addNudge' }
   | null

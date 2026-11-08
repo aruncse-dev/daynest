@@ -12,19 +12,41 @@ export function SheetHost() {
     case 'quickAdd':
       return <QuickAddSheet />
     case 'task':
-      return <TaskSheet key={sheet.task?.id ?? 'new'} task={sheet.task} defaults={sheet.defaults} />
+      return (
+        <TaskSheet
+          key={sheet.task?.id ?? 'new'}
+          task={sheet.task}
+          defaults={sheet.defaults}
+          remindBefore={sheet.remindBefore}
+        />
+      )
     case 'habit':
       return (
-        <HabitSheet key={sheet.habit?.id ?? 'new'} habit={sheet.habit} defaults={sheet.defaults} />
+        <HabitSheet
+          key={sheet.habit?.id ?? 'new'}
+          habit={sheet.habit}
+          defaults={sheet.defaults}
+          remindTimes={sheet.remindTimes}
+        />
       )
     case 'addNudge':
       return <AddNudgeSheet />
     case 'habitDetail':
       return <HabitDetailSheet key={sheet.habitId} habitId={sheet.habitId} />
     case 'event':
-      return <EventSheet key={sheet.event?.id ?? 'new'} event={sheet.event} date={sheet.date} />
+      return (
+        <EventSheet
+          key={sheet.event?.id ?? 'new'}
+          event={sheet.event}
+          date={sheet.date}
+          defaults={sheet.defaults}
+          remindBefore={sheet.remindBefore}
+        />
+      )
     case 'profile':
-      return <ProfileSheet key={sheet.profile?.id ?? 'new'} profile={sheet.profile} />
+      return (
+        <ProfileSheet key={sheet.profile?.id ?? 'new'} profile={sheet.profile} role={sheet.role} />
+      )
     case 'reminder':
       return <ReminderSheet key={sheet.reminder?.id ?? 'new'} reminder={sheet.reminder} />
   }

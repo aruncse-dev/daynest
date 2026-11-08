@@ -4,9 +4,9 @@
 
 DayNest is a mobile web app. The app loads from the web (Vercel); **everything you enter is saved only on your phone** in browser storage (IndexedDB). No account, no server database, no analytics.
 
-## What's inside: 3 tabs
+## What's inside: 4 tabs
 
-DayNest is for **managing your own day** on one phone. You can also keep **family members** on the same phone (nothing is shared or synced).
+DayNest is for **managing your own day** on one phone, and for keeping track of your **family's** routines and activities (nothing is shared or synced).
 
 | Tab          | What it does                                                                                                                                 |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -16,13 +16,18 @@ DayNest is for **managing your own day** on one phone. You can also keep **famil
 
 **Settings** (behind your avatar) is one short page: name, family members, theme, chime, backup, tour, setup again, privacy.
 
-### Family members (one phone, nothing shared)
+### Family (one phone, nothing shared)
 
-- Add people in **Settings → Family members** (name, picture, colour).
-- Once someone is added, a **Family** tab appears. Tap a person to see their day, and add to-dos and habits for them.
-- To-dos, habits, reminders and events get a **For** choice (Me / Mia / …).
-- Their reminders fire on this phone with their name, e.g. _“Mia: Brush teeth”_.
-- **Today** stays about you, with a small strip linking to the family's day.
+Keep track of your **spouse, kids and parents** on your phone: their routines, activities and appointments. Nothing is shared or synced.
+
+- The **Family** tab is always there. Add a **Spouse**, **Child**, **Parent** or someone else (name, picture, colour), in the tab, in Settings, or in the optional setup step.
+- Tap a person to see their day, with **ideas for their role**. Each idea opens prefilled so you can adjust the time:
+  - **Child:** reading time, brush teeth, homework, pack school bag, activity class, school event
+  - **Parent:** medicine taken, call / check in, walk together, doctor appointment, groceries, birthday
+  - **Spouse:** talk about our day, appreciate them, date night, birthday, anniversary
+- To-dos, habits, reminders and events have a **For** choice (Me / Priya / Mia / …).
+- Their reminders ring on this phone with their name, e.g. _“Amma: Medicine taken”_.
+- **Today** stays about you, with a small strip linking to the family's day. _Coming up for the family_ lists their appointments and birthdays.
 
 ### Everything is connected 🔔
 

@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { setSetting } from '@/db/actions'
 import { SETTING_ONBOARDED } from '@/db/keys'
-import { applySuggestions, ensureProfile } from '@/db/setup'
+import { addMembers, applySuggestions, ensureProfile } from '@/db/setup'
+import { ROLES, type FamilyRole } from '@/lib/family'
 import { suggest, type SetupAnswers, type Suggestion } from '@/lib/suggest'
 import { FOCUS_AREAS, type FocusArea } from '@/lib/templates'
-import { usePrimaryProfile, useSetting } from '@/lib/hooks'
+import { useMembers, usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { AnimatedBackground } from '@/components/layout/AnimatedBackground'
 import { Button, Input, Toggle, cx } from '@/components/ui'
 import { Tour } from '@/components/Tour'
 
-type Step = 'welcome' | 'you' | 'focus' | 'rhythm' | 'pick' | 'done'
+type Step = 'welcome' | 'you' | 'family' | 'focus' | 'rhythm' | 'pick' | 'done'
 const ME_AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️']
 const VALID = new Set(FOCUS_AREAS.map((f) => f.key))
 
@@ -22,6 +23,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const steps: Step[] = [
     ...(onboarding ? (['welcome'] as Step[]) : []),
     'you',
+    'family',
     'focus',
     'rhythm',
     'pick',
@@ -39,6 +41,8 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const [phoneFreeAt, setPhoneFreeAt] = useState(saved?.phoneFreeAt ?? '22:00')
   const [picked, setPicked] = useState<Set<string> | null>(null)
   const [busy, setBusy] = useState(false)
+  const members = useMembers()
+  const [drafts, setDrafts] = useState<{ name: string; role: FamilyRole }[]>([])
   const [created, setCreated] = useState(0)
 
   const answers: SetupAnswers = { areas, wake, phoneFreeAt: phoneFree ? phoneFreeAt : null }
@@ -51,6 +55,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
     setBusy(true)
     try {
       const meId = await ensureProfile(name, avatar)
+      await addMembers(drafts)
       setCreated(
         await applySuggestions(
           suggestions.filter((s) => chosen.has(s.id)),
@@ -126,6 +131,70 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                     )}
                   >
                     {a}
+                  </button>
+                ))}
+              </div>
+            </StepShell>
+          )}
+          {step === 'family' && (
+            <StepShell
+              emoji="🏡"
+              title="Do you keep track of family too?"
+              sub="Optional. Add your spouse, kids or parents to track their routines, activities and appointments on this phone. Nothing is shared."
+            >
+              {members.length > 0 && (
+                <p className="mb-3 text-xs text-muted">
+                  Already added: {members.map((m) => m.name).join(', ')}
+                </p>
+              )}
+              <div className="grid gap-2">
+                {drafts.map((d, i) => {
+                  const r = ROLES.find((x) => x.value === d.role)!
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 rounded-2xl border border-line bg-surface p-2"
+                    >
+                      <span
+                        className="grid size-10 shrink-0 place-items-center rounded-full text-xl"
+                        style={{ background: r.color }}
+                      >
+                        {r.avatar}
+                      </span>
+                      <Input
+                        value={d.name}
+                        onChange={(e) =>
+                          setDrafts(
+                            drafts.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)),
+                          )
+                        }
+                        placeholder={`${r.label} name`}
+                        aria-label={`${r.label} name`}
+                        maxLength={30}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove"
+                        onClick={() => setDrafts(drafts.filter((_, j) => j !== i))}
+                        className="grid size-10 shrink-0 place-items-center rounded-xl text-muted hover:bg-surface2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {ROLES.filter((r) => r.value !== 'other').map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    onClick={() => setDrafts([...drafts, { name: '', role: r.value }])}
+                    className="grid justify-items-center gap-1 rounded-2xl border border-dashed border-sage-line bg-surface/70 py-3 text-xs font-semibold text-sage-ink active:scale-95"
+                  >
+                    <span className="text-2xl">{r.avatar}</span>+{' '}
+                    {r.value === 'spouse' ? 'Spouse' : r.label}
                   </button>
                 ))}
               </div>
@@ -251,7 +320,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                 disabled={step === 'you' && !name.trim()}
                 onClick={() => go(1)}
               >
-                Next
+                {step === 'family' && !drafts.some((d) => d.name.trim()) ? 'Skip for now' : 'Next'}
               </Button>
             )}
           </div>

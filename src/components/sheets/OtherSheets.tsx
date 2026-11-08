@@ -39,6 +39,7 @@ import {
 } from '@/components/ui'
 import { RemindPicker } from './RemindPicker'
 import { ForPicker } from '@/components/ForPicker'
+import { ROLES, roleOf, type FamilyRole } from '@/lib/family'
 
 const EMOJIS = [
   '🌱',
@@ -103,18 +104,27 @@ function TimesEditor({
   )
 }
 
-export function HabitSheet({ habit, defaults }: { habit?: Habit; defaults?: Partial<Habit> }) {
+export function HabitSheet({
+  habit,
+  defaults,
+  remindTimes,
+}: {
+  habit?: Habit
+  defaults?: Partial<Habit>
+  remindTimes?: string[]
+}) {
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
-  const [title, setTitle] = useState(habit?.title ?? '')
-  const [emoji, setEmoji] = useState(habit?.emoji ?? '🌱')
-  const [targetLabel, setTarget] = useState(habit?.targetLabel ?? '')
-  const [freq, setFreq] = useState<'daily' | 'days'>(habit?.scheduleDays.length ? 'days' : 'daily')
+  const base = { ...defaults, ...habit }
+  const [title, setTitle] = useState(base.title ?? '')
+  const [emoji, setEmoji] = useState(base.emoji ?? '🌱')
+  const [targetLabel, setTarget] = useState(base.targetLabel ?? '')
+  const [freq, setFreq] = useState<'daily' | 'days'>(base.scheduleDays?.length ? 'days' : 'daily')
   const [days, setDays] = useState<number[]>(
-    habit?.scheduleDays.length ? habit.scheduleDays : [1, 2, 3, 4, 5],
+    base.scheduleDays?.length ? base.scheduleDays : [1, 2, 3, 4, 5],
   )
-  const [templateKey, setTemplateKey] = useState(habit?.templateKey)
-  const [times, setTimes] = useState<string[]>([])
+  const [templateKey, setTemplateKey] = useState(base.templateKey)
+  const [times, setTimes] = useState<string[]>(remindTimes ?? [])
   const [forId, setForId] = useState<string | null>(habit?.profileId ?? defaults?.profileId ?? null)
 
   useEffect(() => {
@@ -187,7 +197,7 @@ export function HabitSheet({ habit, defaults }: { habit?: Habit; defaults?: Part
         </>
       }
     >
-      {!habit && (
+      {!habit && !defaults?.title && (
         <Field group label="Ideas">
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
             {HABIT_TEMPLATES.filter((t) => t.key !== 'phone-free-night').map((t) => (
@@ -263,16 +273,27 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'important', label: '⭐ Important date' },
 ]
 
-export function EventSheet({ event, date }: { event?: CalendarEvent; date?: string }) {
+export function EventSheet({
+  event,
+  date,
+  defaults,
+  remindBefore,
+}: {
+  event?: CalendarEvent
+  date?: string
+  defaults?: Partial<CalendarEvent>
+  remindBefore?: number
+}) {
   const close = useUI((s) => s.closeSheet)
-  const [title, setTitle] = useState(event?.title ?? '')
-  const [localDate, setDate] = useState(event?.localDate ?? date ?? todayLocal())
-  const [startTime, setStart] = useState(event?.startTime ?? '')
-  const [type, setType] = useState<EventType>(event?.type ?? 'event')
-  const [repeatYearly, setYearly] = useState(event?.repeatYearly ?? false)
-  const [notes, setNotes] = useState(event?.notes ?? '')
-  const [remind, setRemind] = useState<number | null>(null)
-  const [forId, setForId] = useState<string | null>(event?.profileId ?? null)
+  const base = { ...defaults, ...event }
+  const [title, setTitle] = useState(base.title ?? '')
+  const [localDate, setDate] = useState(base.localDate ?? date ?? todayLocal())
+  const [startTime, setStart] = useState(base.startTime ?? '')
+  const [type, setType] = useState<EventType>(base.type ?? 'event')
+  const [repeatYearly, setYearly] = useState(base.repeatYearly ?? false)
+  const [notes, setNotes] = useState(base.notes ?? '')
+  const [remind, setRemind] = useState<number | null>(remindBefore ?? null)
+  const [forId, setForId] = useState<string | null>(base.profileId ?? null)
 
   useEffect(() => {
     if (event)
@@ -361,16 +382,20 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
   )
 }
 
-const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '👵', '👴', '👧', '👦', '🧒', '👶']
+const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '💑', '👵', '👴', '👧', '👦', '🧒', '👶']
 const COLORS = ['#dce9dc', '#e9dfd0', '#f0dfdf', '#e6e2f1', '#dfeaf0', '#f4ead2']
 
 /** Edit yourself, or add/edit a family member. Members live only on this phone. */
-export function ProfileSheet({ profile }: { profile?: Profile }) {
+export function ProfileSheet({ profile, role: presetRole }: { profile?: Profile; role?: string }) {
   const close = useUI((s) => s.closeSheet)
   const isMe = profile?.isPrimary ?? false
+  const [role, setRole] = useState<FamilyRole>(
+    profile ? roleOf(profile) : ((presetRole as FamilyRole) ?? 'child'),
+  )
+  const roleInfo = ROLES.find((r) => r.value === role)!
   const [name, setName] = useState(profile?.name ?? '')
-  const [avatar, setAvatar] = useState(profile?.avatar ?? (isMe ? '🙂' : '🧒'))
-  const [color, setColor] = useState(profile?.color ?? COLORS[2])
+  const [avatar, setAvatar] = useState(profile?.avatar ?? (isMe ? '🙂' : roleInfo.avatar))
+  const [color, setColor] = useState(profile?.color ?? roleInfo.color)
   const save = async () => {
     if (!name.trim()) return
     await saveProfile({
@@ -378,7 +403,7 @@ export function ProfileSheet({ profile }: { profile?: Profile }) {
       name: name.trim(),
       avatar: avatar || name.trim()[0].toUpperCase(),
       color,
-      role: profile?.role,
+      role: isMe ? profile?.role : role,
       isPrimary: isMe,
       archivedAt: null,
     })
@@ -417,6 +442,27 @@ export function ProfileSheet({ profile }: { profile?: Profile }) {
           autoFocus={!profile}
         />
       </Field>
+      {!isMe && (
+        <Field group label="Who are they?">
+          <div className="flex flex-wrap gap-2">
+            {ROLES.map((r) => (
+              <Chip
+                key={r.value}
+                active={role === r.value}
+                onClick={() => {
+                  setRole(r.value)
+                  if (!profile) {
+                    setAvatar(r.avatar)
+                    setColor(r.color)
+                  }
+                }}
+              >
+                {r.avatar} {r.label}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+      )}
       <Field group label="Picture">
         <div className="flex flex-wrap gap-1.5">
           {[name.trim()[0]?.toUpperCase() ?? 'A', ...AVATARS].map((a) => (

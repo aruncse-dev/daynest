@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('virtual:pwa-register/react', () => ({
@@ -35,6 +35,10 @@ describe('App', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Get started' }))
     await userEvent.type(screen.getByPlaceholderText('Your name'), 'Robin')
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    // optional family step: add a child
+    await userEvent.click(screen.getByRole('button', { name: /\+ Child/ }))
+    await userEvent.type(screen.getByLabelText('Child name'), 'Mia')
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
     await userEvent.click(screen.getByRole('button', { name: /Body basics/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
     await userEvent.click(screen.getByRole('button', { name: 'Next' })) // rhythm defaults
@@ -53,7 +57,8 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: /Robin/ }, { timeout: 3000 }),
     ).toBeInTheDocument()
-    expect(await db.profiles.count()).toBe(1)
+    expect(await db.profiles.count()).toBe(2)
+    expect((await db.profiles.filter((p) => p.name === 'Mia').first())?.role).toBe('child')
     expect(await db.habits.filter((h) => h.templateKey === 'phone-free-night').count()).toBe(1)
     // health habits are never pre-ticked
     expect(
@@ -62,12 +67,29 @@ describe('App', () => {
     // "Plan tomorrow" habit comes with its own reminder
     const plan = await db.habits.filter((h) => h.templateKey === 'plan-tomorrow').first()
     expect(await db.reminders.filter((r) => r.link?.id === plan?.id).count()).toBe(1)
-    expect(screen.queryByRole('link', { name: /Family/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Family/ })).toBeInTheDocument()
 
     // quick add a to-do from Today
     await userEvent.click(screen.getByRole('button', { name: 'Quick add task' }))
     await userEvent.type(screen.getByLabelText('Task title'), 'Water the garden{enter}')
     expect(await screen.findByText('Water the garden')).toBeInTheDocument()
+
+    // Family tab: role-based idea opens a prefilled habit for Mia with a reminder
+    await userEvent.click(screen.getByRole('link', { name: /Family/ }))
+    // the first member's card opens by default
+    await userEvent.click(await screen.findByRole('button', { name: /Reading time/ }))
+    expect(screen.getByLabelText('Reminder time 1')).toHaveValue('19:30')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const mia = await db.profiles.filter((p) => p.name === 'Mia').first()
+    await waitFor(async () => {
+      const habit = await db.habits
+        .filter((h) => h.profileId === mia?.id && h.title === 'Reading time')
+        .first()
+      expect(habit).toBeTruthy()
+      const r = await db.reminders.filter((x) => x.link?.id === habit!.id).first()
+      expect(r?.title).toBe('Mia: Reading time')
+      expect(r?.times).toEqual(['19:30'])
+    })
   })
 })
 

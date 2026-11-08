@@ -89,7 +89,15 @@ export function QuickAddSheet() {
   )
 }
 
-export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<Task> }) {
+export function TaskSheet({
+  task,
+  defaults,
+  remindBefore,
+}: {
+  task?: Task
+  defaults?: Partial<Task>
+  remindBefore?: number
+}) {
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
   const base = { ...defaults, ...task }
@@ -106,7 +114,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
   const [days, setDays] = useState<number[]>(
     base.recurrenceRule?.type === 'selectedDays' ? base.recurrenceRule.days : [1, 3, 5],
   )
-  const [remind, setRemind] = useState<number | null>(null)
+  const [remind, setRemind] = useState<number | null>(remindBefore ?? null)
   const [forId, setForId] = useState<string | null>(base.profileId ?? null)
 
   useEffect(() => {
