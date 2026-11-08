@@ -342,7 +342,6 @@ export function EventSheet({
         </>
       }
     >
-      <ForPicker value={forId} onChange={setForId} />
       <Field label="What">
         <Input
           value={title}
@@ -351,6 +350,7 @@ export function EventSheet({
           placeholder="e.g. Dentist"
         />
       </Field>
+      <ForPicker value={forId} onChange={setForId} />
       <div className="flex flex-wrap gap-2">
         {EVENT_TYPES.map((t) => (
           <Chip key={t.value} active={type === t.value} onClick={() => setType(t.value)}>

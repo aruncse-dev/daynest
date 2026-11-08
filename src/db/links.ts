@@ -1,7 +1,14 @@
 import { db } from './db'
 import { toggleHabit, toggleTask } from './actions'
 import { uuid } from '@/lib/id'
-import { minutesToTime, nowIso, timeToMinutes, todayLocal, type LocalDate } from '@/lib/date'
+import {
+  formatTime12,
+  minutesToTime,
+  nowIso,
+  timeToMinutes,
+  todayLocal,
+  type LocalDate,
+} from '@/lib/date'
 import { isDueOn } from '@/lib/habits'
 import { eventsBetween } from '@/lib/events'
 import { taskAppearsOn } from '@/lib/recurrence'
@@ -56,8 +63,8 @@ export async function syncHabitReminder(habit: Habit, times: string[]) {
       profileId: habit.profileId,
       emoji: habit.emoji,
       message: habit.targetLabel
-        ? `${habit.targetLabel} — tap Done when you've finished.`
-        : "Tap Done when you've finished.",
+        ? `${habit.targetLabel}. Tap “Mark done” when finished.`
+        : 'Tap “Mark done” when finished.',
       times: [...new Set(times)].sort(),
       days: habit.scheduleDays,
     },
@@ -80,7 +87,7 @@ export async function syncTaskReminder(task: Task, before: number | null) {
       title: task.title,
       profileId: task.profileId,
       emoji: '📝',
-      message: task.dueTime ? `To-do at ${task.dueTime}.` : 'On your list for today.',
+      message: task.dueTime ? `Today at ${formatTime12(task.dueTime)}.` : 'On your list for today.',
       times: [at],
       days: [],
     },
@@ -97,7 +104,7 @@ export async function syncEventReminder(event: CalendarEvent, before: number | n
       title: event.title,
       profileId: event.profileId,
       emoji,
-      message: event.startTime ? `Today at ${event.startTime}.` : 'Today.',
+      message: event.startTime ? `Today at ${formatTime12(event.startTime)}.` : 'Today.',
       times: [at],
       days: [],
     },

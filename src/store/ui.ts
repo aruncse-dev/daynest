@@ -55,10 +55,11 @@ export const useUI = create<UIState>((set) => ({
   toasts: [],
   toast: (message, opts) => {
     const id = toastSeq++
-    set((s) => ({ toasts: [...s.toasts.slice(-2), { id, message, ...opts }] }))
+    // one at a time: a new toast replaces the previous one
+    set({ toasts: [{ id, message, ...opts }] })
     setTimeout(
       () => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-      opts?.action ? 4500 : 2200,
+      opts?.action ? 4000 : 1800,
     )
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),

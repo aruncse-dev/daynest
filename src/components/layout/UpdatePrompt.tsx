@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { RefreshCw } from 'lucide-react'
-import { toast } from '@/store/ui'
 
 export function UpdatePrompt() {
   const {
@@ -15,11 +14,9 @@ export function UpdatePrompt() {
     },
   })
 
+  // the app shell being cached is not news to the user; just acknowledge it silently
   useEffect(() => {
-    if (offlineReady) {
-      toast('DayNest is ready — your data stays on this device', { emoji: '🌿' })
-      setOfflineReady(false)
-    }
+    if (offlineReady) setOfflineReady(false)
   }, [offlineReady, setOfflineReady])
 
   if (!needRefresh) return null
