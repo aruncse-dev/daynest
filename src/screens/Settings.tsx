@@ -14,7 +14,7 @@ import {
   getFolderHandle,
   RETENTION_KEY,
 } from '@/lib/folderBackup'
-import { usePrimaryProfile, useSetting } from '@/lib/hooks'
+import { useMembers, usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Avatar,
@@ -31,6 +31,7 @@ import { Tour } from '@/components/Tour'
 /** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
 export function Settings() {
   const me = usePrimaryProfile()
+  const members = useMembers()
   const openSheet = useUI((s) => s.openSheet)
   const theme = useSetting<'light' | 'dark' | 'system'>('theme', 'system')
   const sound = useSetting('reminderSound', true)
@@ -54,6 +55,23 @@ export function Settings() {
             <ChevronRight size={18} className="text-muted" />
           </Row>
         )}
+        <Row
+          onClick={() => (members.length ? navigate('/family') : openSheet({ type: 'profile' }))}
+        >
+          <span className="flex-1">
+            Family members
+            <small className="block text-[11px] text-muted">
+              {members.length
+                ? members.map((m) => m.name).join(', ')
+                : 'Add people you plan for. Kept only on this phone.'}
+            </small>
+          </span>
+          {members.length ? (
+            <ChevronRight size={18} className="text-muted" />
+          ) : (
+            <span className="text-sm font-bold text-sage-ink">+ Add</span>
+          )}
+        </Row>
       </Group>
 
       <Group>

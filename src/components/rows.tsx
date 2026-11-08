@@ -7,8 +7,20 @@ import { formatLocal, formatTime12, todayLocal, type LocalDate } from '@/lib/dat
 import type { DayTask } from '@/lib/queries'
 import { describeRule } from '@/lib/recurrence'
 import { toast, useUI } from '@/store/ui'
+import { useProfileMap } from '@/lib/hooks'
 import { chime } from '@/lib/sound'
 import { CheckBox, Tag, cx } from './ui'
+
+/** Name tag for items that belong to a family member (not you). */
+function OwnerTag({ profileId }: { profileId?: string | null }) {
+  const p = useProfileMap().get(profileId ?? '')
+  if (!p || p.isPrimary) return null
+  return (
+    <span className="inline-flex items-center gap-0.5 font-semibold text-ink/70">
+      · {p.avatar} {p.name}
+    </span>
+  )
+}
 
 /** The reminder time(s) attached to a habit, to-do or event, if any. */
 function useReminderTimes(type: ReminderLink['type'], id: string): string | null {
@@ -85,10 +97,11 @@ export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean 
             </span>
           )}
           {bell && (
-            <>
+            <span className="inline-flex items-center gap-1">
               · <BellTag text={bell} />
-            </>
+            </span>
           )}
+          <OwnerTag profileId={task.profileId} />
         </div>
       </button>
       {!done && (task.priority === 'high' || task.priority === 'important') && (
@@ -124,11 +137,12 @@ export function HabitRow({
         <b className="block truncate text-[13.5px]">{habit.title}</b>
         <small className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
           {habit.targetLabel ?? 'Daily'}
+          <OwnerTag profileId={habit.profileId} />
           {streak ? <span className="text-amber-ink">· 🔥 {streak}</span> : null}
           {bell && (
-            <>
+            <span className="inline-flex items-center gap-1">
               · <BellTag text={bell} />
-            </>
+            </span>
           )}
         </small>
       </div>
@@ -177,9 +191,9 @@ export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDat
           {formatLocal(date, 'EEEE')}
           {event.startTime ? ` · ${formatTime12(event.startTime)}` : ' · All day'}
           {bell && (
-            <>
+            <span className="inline-flex items-center gap-1">
               · <BellTag text={bell} />
-            </>
+            </span>
           )}
         </small>
       </div>

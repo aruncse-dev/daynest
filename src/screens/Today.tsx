@@ -11,7 +11,8 @@ import {
   toLocalDate,
   type LocalDate,
 } from '@/lib/date'
-import { usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
+import { useMembers, usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
+import { isDueOn } from '@/lib/habits'
 import { useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
 import { motivationFor } from '@/lib/wellness'
 import { nextSlotAfter } from '@/lib/reminders'
@@ -27,7 +28,7 @@ import {
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { toast, useUI } from '@/store/ui'
-import { Button, LinkButton, Panel, Ring, Skeleton } from '@/components/ui'
+import { Avatar, Button, LinkButton, Panel, Ring, Skeleton } from '@/components/ui'
 import { EventRow, HabitRow, TaskRow } from '@/components/rows'
 
 export function Today() {
@@ -35,8 +36,10 @@ export function Today() {
   const now = useNow()
   const me = usePrimaryProfile()
   const openSheet = useUI((s) => s.openSheet)
-  const tasks = useDayTasks(today, { includeOverdue: true })
-  const habits = useHabitsForDay(today)
+  // Today is about you; family members' items live on the Family tab
+  const mine = (pid?: string | null) => !pid || pid === me?.id
+  const tasks = useDayTasks(today, { includeOverdue: true })?.filter((t) => mine(t.task.profileId))
+  const habits = useHabitsForDay(today)?.filter((h) => mine(h.habit.profileId))
   const doneCount =
     (tasks?.filter((t) => t.done).length ?? 0) + (habits?.filter((h) => h.done).length ?? 0)
   const total = (tasks?.length ?? 0) + (habits?.length ?? 0)
@@ -114,6 +117,7 @@ export function Today() {
       </Panel>
 
       <ComingUp today={today} nudge={nextNudge} />
+      <FamilyStrip today={today} />
     </div>
   )
 }
@@ -384,4 +388,48 @@ function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
     )
   }
   return null
+}
+
+/** A small link to the family's day, only when family members exist. */
+function FamilyStrip({ today }: { today: LocalDate }) {
+  const members = useMembers()
+  const navigate = useNavigate()
+  const left = useLiveQuery(async () => {
+    const ids = new Set(members.map((m) => m.id))
+    const [hs, es] = await Promise.all([
+      db.habits.toArray(),
+      db.habitEntries.where('localDate').equals(today).toArray(),
+    ])
+    const done = new Set(es.map((e) => e.habitId))
+    return hs.filter(
+      (h) => h.profileId && ids.has(h.profileId) && isDueOn(h, today) && !done.has(h.id),
+    ).length
+  }, [today, members.length])
+  if (!members.length) return null
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/family')}
+      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-3 text-left"
+    >
+      <div className="flex -space-x-2">
+        {members.slice(0, 4).map((p) => (
+          <Avatar
+            key={p.id}
+            avatar={p.avatar}
+            color={p.color}
+            size={30}
+            className="ring-2 ring-surface"
+          />
+        ))}
+      </div>
+      <span className="flex-1 text-sm">
+        <b>Family</b>
+        <span className="block text-xs text-muted">
+          {left ? `${left} habit${left > 1 ? 's' : ''} still to do today` : 'All caught up 🌼'}
+        </span>
+      </span>
+      <span className="text-muted">›</span>
+    </button>
+  )
 }

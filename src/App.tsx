@@ -13,6 +13,7 @@ import { Setup } from '@/screens/Setup'
 
 const Plan = lazy(() => import('@/screens/Plan').then((m) => ({ default: m.Plan })))
 const Routines = lazy(() => import('@/screens/Routines').then((m) => ({ default: m.Routines })))
+const Family = lazy(() => import('@/screens/Family').then((m) => ({ default: m.Family })))
 const Settings = lazy(() => import('@/screens/Settings').then((m) => ({ default: m.Settings })))
 
 function useTheme() {
@@ -80,7 +81,7 @@ export default function App() {
                 <Route index element={<Today />} />
                 <Route path="plan" element={<Plan />} />
                 <Route path="routines" element={<Routines />} />
-                <Route path="family" element={<Navigate to="/" replace />} />
+                <Route path="family" element={<Family />} />
                 <Route path="settings" element={<Settings />} />
                 {/* old links */}
                 <Route path="tasks" element={<Navigate to="/plan" replace />} />

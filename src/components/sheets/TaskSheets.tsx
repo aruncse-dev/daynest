@@ -19,6 +19,7 @@ import {
   Toggle,
 } from '@/components/ui'
 import { RemindPicker } from './RemindPicker'
+import { ForPicker } from '@/components/ForPicker'
 
 type RepeatKey = 'none' | RecurrenceRule['type']
 
@@ -29,6 +30,7 @@ export function QuickAddSheet() {
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState<'today' | 'tomorrow' | 'someday'>('today')
   const [important, setImportant] = useState(false)
+  const [forId, setForId] = useState<string | null>(null)
 
   const submit = async () => {
     if (!title.trim()) return
@@ -38,7 +40,7 @@ export function QuickAddSheet() {
       dueDate: when === 'today' ? today : when === 'tomorrow' ? addLocalDays(today, 1) : null,
       priority: important ? 'high' : 'normal',
       category: 'Personal',
-      profileId: me?.id ?? null,
+      profileId: forId ?? me?.id ?? null,
       status: 'open',
     })
     toast('To-do added', { emoji: '✅' })
@@ -72,6 +74,7 @@ export function QuickAddSheet() {
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         aria-label="Task title"
       />
+      <ForPicker value={forId} onChange={setForId} />
       <div className="flex flex-wrap gap-2">
         {(['today', 'tomorrow', 'someday'] as const).map((w) => (
           <Chip key={w} active={when === w} onClick={() => setWhen(w)}>
@@ -104,6 +107,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
     base.recurrenceRule?.type === 'selectedDays' ? base.recurrenceRule.days : [1, 3, 5],
   )
   const [remind, setRemind] = useState<number | null>(null)
+  const [forId, setForId] = useState<string | null>(base.profileId ?? null)
 
   useEffect(() => {
     if (task)
@@ -123,7 +127,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
       dueTime: dueTime || null,
       priority: important ? 'high' : 'normal',
       category: task?.category ?? 'Personal',
-      profileId: task?.profileId ?? me?.id ?? null,
+      profileId: forId ?? me?.id ?? null,
       goalId: task?.goalId ?? null,
       recurrenceRule: rule,
       status: task?.status ?? 'open',
@@ -184,6 +188,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
           placeholder="e.g. Call the bank"
         />
       </Field>
+      <ForPicker value={forId} onChange={setForId} />
       <div className="grid grid-cols-2 gap-3">
         <Field
           label={repeat === 'none' ? 'Date' : 'Starts on'}

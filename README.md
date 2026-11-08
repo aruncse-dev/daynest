@@ -6,7 +6,7 @@ DayNest is a mobile web app. The app loads from the web (Vercel); **everything y
 
 ## What's inside: 3 tabs
 
-DayNest is for **managing your own day** on one phone.
+DayNest is for **managing your own day** on one phone. You can also keep **family members** on the same phone (nothing is shared or synced).
 
 | Tab          | What it does                                                                                                                                 |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,7 +14,15 @@ DayNest is for **managing your own day** on one phone.
 | **Plan**     | **Upcoming** (next 2 weeks + someday ideas, done tucked away) · **Calendar** (events, appointments, birthdays)                               |
 | **Routines** | One page: the **Phone-free evenings** switch, **My habits**, **My reminders** (stand-alone nudges)                                           |
 
-**Settings** (behind your avatar) is one short page: name, theme, chime, backup, tour, setup again, privacy.
+**Settings** (behind your avatar) is one short page: name, family members, theme, chime, backup, tour, setup again, privacy.
+
+### Family members (one phone, nothing shared)
+
+- Add people in **Settings → Family members** (name, picture, colour).
+- Once someone is added, a **Family** tab appears. Tap a person to see their day, and add to-dos and habits for them.
+- To-dos, habits, reminders and events get a **For** choice (Me / Mia / …).
+- Their reminders fire on this phone with their name, e.g. _“Mia: Brush teeth”_.
+- **Today** stays about you, with a small strip linking to the family's day.
 
 ### Everything is connected 🔔
 

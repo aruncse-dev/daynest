@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { AnimatedBackground } from './AnimatedBackground'
 import { NAV } from './nav'
 import { Avatar, cx } from '@/components/ui'
-import { usePrimaryProfile } from '@/lib/hooks'
+import { useMembers, usePrimaryProfile } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Toasts } from './Toasts'
 import { NudgeHost } from './NudgeHost'
@@ -14,6 +14,7 @@ import { PhoneFreeGuard } from './PhoneFreeGuard'
 /** Mobile-first single column. On larger screens the same phone layout is centred. */
 export function AppShell() {
   const me = usePrimaryProfile()
+  const hasFamily = useMembers().length > 0
   const openSheet = useUI((s) => s.openSheet)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -47,33 +48,35 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[var(--nav)] backdrop-blur-xl"
       >
         <div className="mx-auto flex max-w-[480px] justify-around px-2 pb-safe pt-1.5">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                cx(
-                  'grid flex-1 justify-items-center gap-0.5 py-1 text-[11px]',
-                  isActive ? 'font-bold text-sage-ink' : 'text-muted',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    className={cx(
-                      'grid h-8 w-14 place-items-center rounded-full transition',
-                      isActive && 'bg-sage-soft',
-                    )}
-                  >
-                    <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
-                  </span>
-                  {label}
-                </>
-              )}
-            </NavLink>
-          ))}
+          {NAV.filter((n) => hasFamily || !('needsMembers' in n)).map(
+            ({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  cx(
+                    'grid flex-1 justify-items-center gap-0.5 py-1 text-[11px]',
+                    isActive ? 'font-bold text-sage-ink' : 'text-muted',
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span
+                      className={cx(
+                        'grid h-8 w-14 place-items-center rounded-full transition',
+                        isActive && 'bg-sage-soft',
+                      )}
+                    >
+                      <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+                    </span>
+                    {label}
+                  </>
+                )}
+              </NavLink>
+            ),
+          )}
         </div>
       </nav>
 

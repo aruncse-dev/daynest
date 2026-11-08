@@ -14,7 +14,9 @@ export function SheetHost() {
     case 'task':
       return <TaskSheet key={sheet.task?.id ?? 'new'} task={sheet.task} defaults={sheet.defaults} />
     case 'habit':
-      return <HabitSheet key={sheet.habit?.id ?? 'new'} habit={sheet.habit} />
+      return (
+        <HabitSheet key={sheet.habit?.id ?? 'new'} habit={sheet.habit} defaults={sheet.defaults} />
+      )
     case 'addNudge':
       return <AddNudgeSheet />
     case 'habitDetail':

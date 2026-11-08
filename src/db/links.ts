@@ -18,11 +18,19 @@ export async function deleteLinkedReminders(type: ReminderLink['type'], id: stri
   await db.reminders.bulkDelete(rows.map((r) => r.id))
 }
 
+/** "Mia: Brush teeth" when the item belongs to a family member. */
+async function titleFor(title: string, profileId?: string | null) {
+  if (!profileId) return title
+  const p = await db.profiles.get(profileId)
+  return p && !p.isPrimary ? `${p.name}: ${title}` : title
+}
+
 async function upsertLinked(
   link: ReminderLink,
-  fields: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days'>,
+  fields: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days' | 'profileId'>,
 ) {
   const existing = await getLinkedReminder(link.type, link.id)
+  fields = { ...fields, title: await titleFor(fields.title, fields.profileId) }
   const now = nowIso()
   const row: Reminder = {
     ...(existing ?? { id: uuid(), createdAt: now, priority: 'normal' as const }),
@@ -44,6 +52,7 @@ export async function syncHabitReminder(habit: Habit, times: string[]) {
     { type: 'habit', id: habit.id },
     {
       title: habit.title,
+      profileId: habit.profileId,
       emoji: habit.emoji,
       message: habit.targetLabel
         ? `${habit.targetLabel} — tap Done when you've finished.`
@@ -68,6 +77,7 @@ export async function syncTaskReminder(task: Task, before: number | null) {
     { type: 'task', id: task.id, before: before! },
     {
       title: task.title,
+      profileId: task.profileId,
       emoji: '📝',
       message: task.dueTime ? `To-do at ${task.dueTime}.` : 'On your list for today.',
       times: [at],
@@ -84,6 +94,7 @@ export async function syncEventReminder(event: CalendarEvent, before: number | n
     { type: 'event', id: event.id, before: before! },
     {
       title: event.title,
+      profileId: event.profileId,
       emoji,
       message: event.startTime ? `Today at ${event.startTime}.` : 'Today.',
       times: [at],

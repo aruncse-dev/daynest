@@ -6,7 +6,7 @@ import type { LocalDate } from '@/lib/date'
 export type SheetState =
   | { type: 'task'; task?: Task; defaults?: Partial<Task> }
   | { type: 'quickAdd' }
-  | { type: 'habit'; habit?: Habit }
+  | { type: 'habit'; habit?: Habit; defaults?: Partial<Habit> }
   | { type: 'habitDetail'; habitId: string }
   | { type: 'event'; event?: CalendarEvent; date?: LocalDate }
   | { type: 'profile'; profile?: Profile }

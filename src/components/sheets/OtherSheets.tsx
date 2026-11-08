@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Archive, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import {
+  archiveProfile,
   deleteEvent,
   deleteHabit,
   deleteReminder,
@@ -37,6 +38,7 @@ import {
   Toggle,
 } from '@/components/ui'
 import { RemindPicker } from './RemindPicker'
+import { ForPicker } from '@/components/ForPicker'
 
 const EMOJIS = [
   '🌱',
@@ -101,7 +103,7 @@ function TimesEditor({
   )
 }
 
-export function HabitSheet({ habit }: { habit?: Habit }) {
+export function HabitSheet({ habit, defaults }: { habit?: Habit; defaults?: Partial<Habit> }) {
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
   const [title, setTitle] = useState(habit?.title ?? '')
@@ -113,6 +115,7 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
   )
   const [templateKey, setTemplateKey] = useState(habit?.templateKey)
   const [times, setTimes] = useState<string[]>([])
+  const [forId, setForId] = useState<string | null>(habit?.profileId ?? defaults?.profileId ?? null)
 
   useEffect(() => {
     if (habit) void getLinkedReminder('habit', habit.id).then((r) => setTimes(r?.times ?? []))
@@ -127,7 +130,7 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
       targetLabel: targetLabel.trim() || undefined,
       description: habit?.description,
       templateKey,
-      profileId: habit?.profileId ?? me?.id ?? null,
+      profileId: forId ?? me?.id ?? null,
       scheduleDays: freq === 'daily' ? [] : days,
       status: habit?.status ?? 'active',
       archivedAt: habit?.archivedAt ?? null,
@@ -214,6 +217,7 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
           maxLength={80}
         />
       </Field>
+      <ForPicker value={forId} onChange={setForId} />
       <Field group label="Icon">
         <div className="flex flex-wrap gap-1.5">
           {EMOJIS.map((e) => (
@@ -268,6 +272,7 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
   const [repeatYearly, setYearly] = useState(event?.repeatYearly ?? false)
   const [notes, setNotes] = useState(event?.notes ?? '')
   const [remind, setRemind] = useState<number | null>(null)
+  const [forId, setForId] = useState<string | null>(event?.profileId ?? null)
 
   useEffect(() => {
     if (event)
@@ -283,7 +288,7 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
       startTime: startTime || null,
       endTime: event?.endTime ?? null,
       type,
-      profileId: event?.profileId ?? null,
+      profileId: forId,
       repeatYearly: repeatYearly || type === 'birthday',
       notes: notes.trim() || undefined,
     })
@@ -316,6 +321,7 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
         </>
       }
     >
+      <ForPicker value={forId} onChange={setForId} />
       <Field label="What">
         <Input
           value={title}
@@ -355,38 +361,61 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
   )
 }
 
-const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '🧑', '👵', '👴']
+const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '👵', '👴', '👧', '👦', '🧒', '👶']
+const COLORS = ['#dce9dc', '#e9dfd0', '#f0dfdf', '#e6e2f1', '#dfeaf0', '#f4ead2']
 
+/** Edit yourself, or add/edit a family member. Members live only on this phone. */
 export function ProfileSheet({ profile }: { profile?: Profile }) {
   const close = useUI((s) => s.closeSheet)
+  const isMe = profile?.isPrimary ?? false
   const [name, setName] = useState(profile?.name ?? '')
-  const [avatar, setAvatar] = useState(profile?.avatar ?? '🙂')
+  const [avatar, setAvatar] = useState(profile?.avatar ?? (isMe ? '🙂' : '🧒'))
+  const [color, setColor] = useState(profile?.color ?? COLORS[2])
   const save = async () => {
     if (!name.trim()) return
     await saveProfile({
       id: profile?.id,
       name: name.trim(),
       avatar: avatar || name.trim()[0].toUpperCase(),
-      color: profile?.color ?? '#dce9dc',
+      color,
       role: profile?.role,
-      isPrimary: profile?.isPrimary ?? true,
+      isPrimary: isMe,
       archivedAt: null,
     })
-    toast('Saved', { emoji: avatar })
+    toast(profile ? 'Saved' : `${name.trim()} added`, { emoji: avatar })
     close()
   }
   return (
     <Sheet
-      title="Your name"
+      title={isMe ? 'You' : profile ? 'Edit family member' : 'Add family member'}
       onClose={close}
       footer={
-        <Button className="flex-1" onClick={save} disabled={!name.trim()}>
-          Save
-        </Button>
+        <>
+          {profile && !isMe && (
+            <ConfirmButton
+              onConfirm={async () => {
+                await archiveProfile(profile.id)
+                toast(`${profile.name} removed`)
+                close()
+              }}
+              confirmText="Remove?"
+            >
+              <Trash2 size={16} />
+            </ConfirmButton>
+          )}
+          <Button className="flex-1" onClick={save} disabled={!name.trim()}>
+            Save
+          </Button>
+        </>
       }
     >
       <Field label="Name">
-        <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={40}
+          autoFocus={!profile}
+        />
       </Field>
       <Field group label="Picture">
         <div className="flex flex-wrap gap-1.5">
@@ -395,14 +424,36 @@ export function ProfileSheet({ profile }: { profile?: Profile }) {
               key={a}
               type="button"
               aria-pressed={avatar === a}
+              aria-label={`Picture ${a}`}
               onClick={() => setAvatar(a)}
-              className={`grid size-10 place-items-center rounded-full bg-[#dce9dc] text-lg ${avatar === a ? 'ring-2 ring-sage' : ''}`}
+              className={`grid size-10 place-items-center rounded-full text-lg ${avatar === a ? 'ring-2 ring-sage' : ''}`}
+              style={{ background: color }}
             >
               {a}
             </button>
           ))}
         </div>
       </Field>
+      <Field group label="Colour">
+        <div className="flex flex-wrap gap-2">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={`Colour ${c}`}
+              aria-pressed={color === c}
+              onClick={() => setColor(c)}
+              className={`size-9 rounded-full border border-line ${color === c ? 'ring-2 ring-sage ring-offset-2 ring-offset-surface' : ''}`}
+              style={{ background: c }}
+            />
+          ))}
+        </div>
+      </Field>
+      {!isMe && (
+        <p className="text-[11px] text-muted">
+          Family members are kept only on this phone. Nothing is shared.
+        </p>
+      )}
     </Sheet>
   )
 }
@@ -436,6 +487,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
   const [times, setTimes] = useState<string[]>(reminder?.times?.length ? reminder.times : ['09:00'])
   const [days, setDays] = useState<number[]>(reminder?.days ?? [])
   const [priority, setPriority] = useState<ReminderPriority>(reminder?.priority ?? 'normal')
+  const [forId, setForId] = useState<string | null>(reminder?.profileId ?? null)
 
   const save = async () => {
     if (!title.trim()) return
@@ -446,6 +498,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
       emoji,
       kind,
       priority,
+      profileId: forId,
       intervalMinutes: kind === 'interval' ? intervalMinutes : undefined,
       startTime: kind === 'interval' ? startTime : undefined,
       endTime: kind === 'interval' ? endTime : undefined,
@@ -492,6 +545,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           placeholder="e.g. Take my tablet"
         />
       </Field>
+      <ForPicker value={forId} onChange={setForId} />
       <Field label="Message (optional)">
         <Input
           value={message}

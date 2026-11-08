@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from './db'
+import { saveProfile } from './actions'
 import {
   deleteHabit,
   deleteTask,
@@ -107,5 +108,28 @@ describe('reminders linked to habits and to-dos', () => {
     await deleteHabit(h.id)
     await deleteTask(t.id)
     expect(await db.reminders.count()).toBe(0)
+  })
+
+  it("a family member's reminder carries their name; yours does not", async () => {
+    const me = await saveProfile({ name: 'Robin', avatar: 'R', color: '#eee', isPrimary: true })
+    const mia = await saveProfile({ name: 'Mia', avatar: '👧', color: '#eee', isPrimary: false })
+    const mine = await saveHabit({
+      title: 'Read',
+      emoji: '📖',
+      scheduleDays: [],
+      status: 'active',
+      profileId: me.id,
+    })
+    const hers = await saveHabit({
+      title: 'Brush teeth',
+      emoji: '🦷',
+      scheduleDays: [],
+      status: 'active',
+      profileId: mia.id,
+    })
+    await syncHabitReminder(mine, ['20:00'])
+    await syncHabitReminder(hers, ['19:30'])
+    const titles = (await db.reminders.toArray()).map((r) => r.title).sort()
+    expect(titles).toEqual(['Mia: Brush teeth', 'Read'])
   })
 })

@@ -69,3 +69,9 @@ export function useSetting<T>(key: string, fallback: T): T {
   const row = useLiveQuery(() => db.settings.get(key), [key])
   return row ? (row.value as T) : fallback
 }
+
+/** Family members managed on this phone (everyone except you). Nothing is shared or synced. */
+export function useMembers(): Profile[] {
+  const profiles = useProfiles()
+  return profiles?.filter((p) => !p.isPrimary) ?? []
+}
