@@ -15,7 +15,7 @@ import {
 } from '@/lib/notifications'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
-import { useFamilyMode, usePrimaryProfile, useProfileMap, useSetting, useToday } from '@/lib/hooks'
+import { usePrimaryProfile, useSetting, useToday } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Input, LinkButton, Panel, Skeleton, Tag, Toggle, cx } from '@/components/ui'
 import { HabitRow } from '@/components/rows'
@@ -197,11 +197,11 @@ function PhoneFreeCard() {
             </label>
           </div>
           <label className="flex items-center justify-between gap-3 text-sm">
-            <span>Keep other nudges quiet until morning</span>
+            <span>Keep other reminders quiet until morning</span>
             <Toggle
               checked={quiet.muteNudges}
               onChange={(v) => update({ muteNudges: v })}
-              label="Mute nudges"
+              label="Mute reminders"
             />
           </label>
           <p className="text-white/70">
@@ -220,9 +220,6 @@ function PhoneFreeCard() {
 function HabitsSection() {
   const today = useToday()
   const openSheet = useUI((s) => s.openSheet)
-  const family = useFamilyMode()
-  const me = usePrimaryProfile()
-  const profiles = useProfileMap()
   const data = useLiveQuery(async () => {
     const [habits, entries] = await Promise.all([
       db.habits
@@ -243,16 +240,11 @@ function HabitsSection() {
         <Skeleton />
       </Panel>
     )
-  const rank = (pid?: string | null) =>
-    !pid || pid === me?.id ? 0 : 1 + [...profiles.keys()].indexOf(pid)
-  const list = data.habits
-    .filter((h) => family || !h.profileId || h.profileId === me?.id)
-    .sort(
-      (a, b) =>
-        rank(a.profileId) - rank(b.profileId) ||
-        Number(b.status === 'active') - Number(a.status === 'active') ||
-        a.title.localeCompare(b.title),
-    )
+  const list = data.habits.sort(
+    (a, b) =>
+      Number(b.status === 'active') - Number(a.status === 'active') ||
+      a.title.localeCompare(b.title),
+  )
 
   return (
     <section>
@@ -281,11 +273,6 @@ function HabitsSection() {
                         done={!!data.byHabit.get(h.id)?.has(today)}
                         date={today}
                         streak={currentStreak(h, data.byHabit.get(h.id) ?? new Set(), today)}
-                        owner={
-                          family && h.profileId !== me?.id
-                            ? profiles.get(h.profileId ?? '')
-                            : undefined
-                        }
                       />
                     ) : (
                       <div className="flex items-center gap-3">
@@ -323,35 +310,35 @@ function HabitsSection() {
 
 function NudgesSection() {
   const openSheet = useUI((s) => s.openSheet)
-  const family = useFamilyMode()
+  // stand-alone nudges only: habit/to-do/event reminders live on those items
   const reminders = useLiveQuery(
     () =>
       db.reminders
-        .filter((r) => r.presetKey !== 'phonefree' && r.presetKey !== 'phonefree-soon')
+        .filter((r) => !r.link && r.presetKey !== 'phonefree' && r.presetKey !== 'phonefree-soon')
         .toArray(),
     [],
   )
-  const list = (reminders ?? [])
-    .filter((r) => family || (r.audience ?? 'me') === 'me')
-    .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.title.localeCompare(b.title))
+  const list = (reminders ?? []).sort(
+    (a, b) => Number(b.enabled) - Number(a.enabled) || a.title.localeCompare(b.title),
+  )
   return (
     <section>
       <SectionHead
-        title="My nudges"
+        title="My reminders"
         action={<LinkButton onClick={() => openSheet({ type: 'addNudge' })}>+ Add</LinkButton>}
       />
       <NotificationBanner />
       <Panel className="!py-1.5">
         {list.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted">
-            No nudges yet. Tap “+ Add” for ideas like drinking water or sitting straight.
+            No reminders yet. Tap “+ Add” for ideas like drinking water.
           </p>
         ) : (
           list.map((r) => <NudgeRow key={r.id} reminder={r} />)
         )}
       </Panel>
       <p className="mt-2 px-1 text-[11px] text-muted">
-        Nudges appear while DayNest is open or running in the background. Install it to your home
+        Reminders appear while DayNest is open or running in the background. Install it to your home
         screen for best results.
       </p>
     </section>
@@ -367,7 +354,7 @@ function NotificationBanner() {
       <span className="flex-1">
         {perm === 'denied'
           ? 'Notifications are blocked — allow them for this site in browser settings.'
-          : 'Allow notifications so nudges reach you in the background.'}
+          : 'Allow notifications so reminders reach you in the background.'}
       </span>
       {perm === 'default' && (
         <button
@@ -378,7 +365,7 @@ function NotificationBanner() {
             setPerm(r)
             if (r === 'granted')
               await showSystemNotification({
-                title: '🌿 Nudges are on',
+                title: '🌿 Reminders are on',
                 body: 'Friendly reminders will appear here.',
               })
           }}

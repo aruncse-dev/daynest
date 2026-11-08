@@ -4,6 +4,7 @@ import './index.css'
 import App from './App'
 import { ErrorBoundary } from './components/layout/ErrorBoundary'
 import { db } from './db/db'
+import './lib/install'
 
 db.open().catch((err: unknown) => {
   console.error('Failed to open DayNest database', err)

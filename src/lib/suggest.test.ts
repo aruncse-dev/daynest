@@ -1,27 +1,25 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { suggest, type SetupAnswers } from './suggest'
 import { db } from '@/db/db'
-import { applySuggestions, ensureProfiles } from '@/db/setup'
+import { applySuggestions, ensureProfile } from '@/db/setup'
+import { REMINDER_PRESETS } from '@/db/reminderPresets'
 import { HABIT_TEMPLATES } from './templates'
 
-const base: SetupAnswers = {
-  areas: ['health', 'family'],
-  hasKids: false,
-  wake: '06:30',
-  phoneFreeAt: '22:00',
-  worksWeekdays: true,
-}
+const base: SetupAnswers = { areas: ['organised', 'health'], wake: '06:30', phoneFreeAt: '22:00' }
 
 describe('setup suggestions', () => {
-  it('always includes phone-free night items when a phone-free time is chosen', () => {
+  it('pre-ticks phone-free items when a phone-down time is chosen', () => {
     const s = suggest(base)
     expect(s.find((x) => x.id === 'h:phone-free-night')?.title).toBe('No phone after 10 PM')
     expect(s.find((x) => x.id === 'p:phonefree')?.recommended).toBe(true)
+    const soon = s.find((x) => x.id === 'p:phonefree-soon')
+    expect(soon?.kind === 'nudge' && soon.preset.times).toEqual(['21:45'])
+  })
+  it('never pre-ticks health or calm items', () => {
+    const s = suggest({ ...base, areas: ['health', 'calm'] })
     expect(
-      s.find((x) => x.id === 'p:phonefree-soon')?.kind === 'nudge' &&
-        (s.find((x) => x.id === 'p:phonefree-soon') as { preset: { times?: string[] } }).preset
-          .times,
-    ).toEqual(['21:45'])
+      s.filter((x) => x.area === 'health' || x.area === 'calm').some((x) => x.recommended),
+    ).toBe(false)
   })
   it('skips phone-free items when not wanted', () => {
     expect(
@@ -30,21 +28,22 @@ describe('setup suggestions', () => {
       ),
     ).toBe(false)
   })
-  it('only suggests kids routines when there are kids', () => {
-    expect(suggest({ ...base, areas: ['kids'] }).some((x) => x.area === 'kids')).toBe(false)
-    expect(
-      suggest({ ...base, areas: ['kids'], hasKids: true }).some((x) => x.id === 'p:kid-teeth'),
-    ).toBe(true)
+  it('gives habits reminder times tuned to the daily rhythm', () => {
+    const s = suggest({ ...base, wake: '07:00', phoneFreeAt: '21:30' })
+    const plan = s.find((x) => x.id === 'h:plan-tomorrow')
+    expect(plan?.kind === 'habit' && plan.remindAt).toBe('20:15')
+    const top3 = s.find((x) => x.id === 'h:top3')
+    expect(top3?.kind === 'habit' && top3.remindAt).toBe('07:45')
   })
-  it('tunes nudge times to the household rhythm', () => {
-    const s = suggest({ ...base, wake: '07:00', phoneFreeAt: '21:30', areas: ['health'] })
-    const foot = s.find((x) => x.id === 'p:footwear')
-    expect(foot?.kind === 'nudge' && foot.preset.times).toEqual(['07:30', '17:30'])
-    const pf = s.find((x) => x.id === 'p:phonefree')
-    expect(pf?.kind === 'nudge' && pf.preset.times).toEqual(['21:30'])
+  it('ignores old focus areas from earlier versions', () => {
+    expect(() =>
+      suggest({ ...base, areas: ['family', 'kids'] as unknown as SetupAnswers['areas'] }),
+    ).not.toThrow()
   })
-  it('does not mutate shared templates', () => {
-    suggest({ ...base, phoneFreeAt: '21:00' })
+  it('only offers reminders that suit anyone', () => {
+    const keys = REMINDER_PRESETS.map((p) => p.presetKey)
+    expect(keys).not.toContain('footwear')
+    expect(keys).not.toContain('kid-teeth')
     expect(HABIT_TEMPLATES.find((t) => t.key === 'phone-free-night')?.title).toBe(
       'No phone after 10 PM',
     )
@@ -56,31 +55,24 @@ describe('applying suggestions', () => {
     await db.delete()
     await db.open()
   })
-  it('creates items for each child, enables phone-free hours, and is idempotent', async () => {
-    const answers = { ...base, areas: ['kids', 'health'] as SetupAnswers['areas'], hasKids: true }
-    const ids = await ensureProfiles('Robin', 'R', [
-      { name: 'Mia', avatar: '👧', color: '#eee', role: 'Child', kind: 'child' },
-      { name: 'Leo', avatar: '👦', color: '#eee', role: 'Child', kind: 'child' },
-    ])
-    expect(ids.kidIds).toHaveLength(2)
-    const picks = suggest(answers).filter((s) =>
-      ['h:kid-read', 'p:kid-teeth', 'h:phone-free-night', 'p:phonefree'].includes(s.id),
+  it('creates habits with linked reminders, enables phone-free hours, and is idempotent', async () => {
+    const meId = await ensureProfile('Robin', 'R')
+    const picks = suggest(base).filter((s) =>
+      ['h:plan-tomorrow', 'h:phone-free-night', 'p:phonefree'].includes(s.id),
     )
-    await applySuggestions(picks, answers, ids)
-    expect(await db.habits.where('profileId').anyOf(ids.kidIds).count()).toBe(2)
+    await applySuggestions(picks, base, meId)
+    const plan = await db.habits.filter((h) => h.templateKey === 'plan-tomorrow').first()
+    const linked = await db.reminders.filter((r) => r.link?.id === plan!.id).first()
+    expect(linked?.times).toEqual(['20:45'])
     expect((await db.settings.get('quietHours'))?.value).toMatchObject({
       enabled: true,
       start: '22:00',
       end: '06:30',
     })
 
-    // second run: same profiles, no duplicates
-    const again = await ensureProfiles('Robin', 'R', [
-      { name: 'Mia', avatar: '👧', color: '#eee', role: 'Child', kind: 'child' },
-    ])
-    await applySuggestions(picks, answers, again)
-    expect(await db.profiles.count()).toBe(3)
-    expect(await db.habits.count()).toBe(3)
+    await applySuggestions(picks, base, await ensureProfile('Robin', 'R'))
+    expect(await db.profiles.count()).toBe(1)
+    expect(await db.habits.count()).toBe(2)
     expect(await db.reminders.count()).toBe(2)
   })
 })

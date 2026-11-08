@@ -32,15 +32,10 @@ describe('App', () => {
     await db.delete()
     await db.open()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /Set up my nest/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Get started' }))
     await userEvent.type(screen.getByPlaceholderText('Your name'), 'Robin')
-    await userEvent.click(screen.getByRole('switch', { name: 'I also plan for my family' }))
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
-    // family: add a child
-    await userEvent.click(screen.getByRole('button', { name: /Add a family member/ }))
-    await userEvent.type(screen.getByLabelText('Member 1 name'), 'Mia')
-    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
-    await userEvent.click(screen.getByRole('button', { name: /Kids routines/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Body basics/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
     await userEvent.click(screen.getByRole('button', { name: 'Next' })) // rhythm defaults
     expect(screen.getByText("Here's what we suggest")).toBeInTheDocument()
@@ -48,21 +43,26 @@ describe('App', () => {
       'aria-checked',
       'true',
     )
+    expect(screen.getByRole('checkbox', { name: /Go for a walk/ })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
     await userEvent.click(screen.getByRole('button', { name: /Create \d+ items/ }))
     await userEvent.click(await screen.findByRole('button', { name: /Let's go/ }))
 
     expect(
       await screen.findByRole('heading', { level: 1, name: /Robin/ }, { timeout: 3000 }),
     ).toBeInTheDocument()
-    expect(await db.profiles.count()).toBe(2)
+    expect(await db.profiles.count()).toBe(1)
     expect(await db.habits.filter((h) => h.templateKey === 'phone-free-night').count()).toBe(1)
-    expect((await db.settings.get('familyMode'))?.value).toBe(true)
     // health habits are never pre-ticked
     expect(
-      await db.habits
-        .filter((h) => ['walk', 'exercise', 'yoga'].includes(h.templateKey ?? ''))
-        .count(),
+      await db.habits.filter((h) => ['walk', 'exercise'].includes(h.templateKey ?? '')).count(),
     ).toBe(0)
+    // "Plan tomorrow" habit comes with its own reminder
+    const plan = await db.habits.filter((h) => h.templateKey === 'plan-tomorrow').first()
+    expect(await db.reminders.filter((r) => r.link?.id === plan?.id).count()).toBe(1)
+    expect(screen.queryByRole('link', { name: /Family/ })).not.toBeInTheDocument()
 
     // quick add a to-do from Today
     await userEvent.click(screen.getByRole('button', { name: 'Quick add task' }))

@@ -1,33 +1,27 @@
-import { useState } from 'react'
-import { Archive, Pause, Play, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Archive, Pause, Play, Plus, Trash2 } from 'lucide-react'
 import {
-  archiveProfile,
   deleteEvent,
-  deleteGoal,
   deleteHabit,
   deleteReminder,
   saveEvent,
-  saveGoal,
   saveHabit,
   saveProfile,
   saveReminder,
   setHabitStatus,
 } from '@/db/actions'
+import { getLinkedReminder, syncEventReminder, syncHabitReminder } from '@/db/links'
 import type {
-  ReminderAudience,
-  ReminderPriority,
   CalendarEvent,
   EventType,
-  Goal,
-  GoalHorizon,
-  GoalStatus,
   Habit,
   Profile,
   Reminder,
+  ReminderPriority,
 } from '@/db/types'
 import { todayLocal } from '@/lib/date'
 import { HABIT_TEMPLATES } from '@/lib/templates'
-import { useFamilyMode, usePrimaryProfile, useProfiles } from '@/lib/hooks'
+import { usePrimaryProfile } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Button,
@@ -42,79 +36,104 @@ import {
   TextArea,
   Toggle,
 } from '@/components/ui'
+import { RemindPicker } from './RemindPicker'
 
-function ProfileSelect({
-  value,
+const EMOJIS = [
+  '🌱',
+  '🚶',
+  '💪',
+  '📖',
+  '📝',
+  '🎯',
+  '🧹',
+  '🙏',
+  '🌿',
+  '😴',
+  '🥗',
+  '📵',
+  '🌅',
+  '💡',
+  '🎨',
+  '🎵',
+  '🦷',
+  '☀️',
+]
+
+/** Up to three reminder times, or none. */
+function TimesEditor({
+  times,
   onChange,
-  allowEveryone = true,
+  label,
 }: {
-  value: string
-  onChange: (v: string) => void
-  allowEveryone?: boolean
+  times: string[]
+  onChange: (t: string[]) => void
+  label: string
 }) {
-  const profiles = useProfiles() ?? []
   return (
-    <Select value={value} onChange={(e) => onChange(e.target.value)}>
-      {allowEveryone && <option value="">Everyone / family</option>}
-      {profiles.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.avatar} {p.name}
-        </option>
+    <div className="grid gap-2">
+      {times.map((t, i) => (
+        <div key={i} className="flex gap-2">
+          <Input
+            type="time"
+            value={t}
+            onChange={(e) => onChange(times.map((x, j) => (j === i ? e.target.value : x)))}
+            aria-label={`${label} ${i + 1}`}
+          />
+          <Button
+            variant="outline"
+            aria-label="Remove time"
+            onClick={() => onChange(times.filter((_, j) => j !== i))}
+          >
+            <Trash2 size={15} />
+          </Button>
+        </div>
       ))}
-    </Select>
+      {times.length < 3 && (
+        <Button
+          variant="soft"
+          size="sm"
+          onClick={() => onChange([...times, times.length ? '20:00' : '08:00'])}
+        >
+          <Plus size={14} /> {times.length ? 'Add another time' : 'Add a reminder'}
+        </Button>
+      )}
+    </div>
   )
 }
 
-const EMOJIS = [
-  '🚶',
-  '💧',
-  '📚',
-  '🧘',
-  '🏃',
-  '🥗',
-  '😴',
-  '📵',
-  '🎹',
-  '🧸',
-  '🙏',
-  '✍️',
-  '🌱',
-  '🦷',
-  '☀️',
-  '🍎',
-  '💪',
-  '🎨',
-]
-
 export function HabitSheet({ habit }: { habit?: Habit }) {
-  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
   const [title, setTitle] = useState(habit?.title ?? '')
   const [emoji, setEmoji] = useState(habit?.emoji ?? '🌱')
   const [targetLabel, setTarget] = useState(habit?.targetLabel ?? '')
-  const [profileId, setProfileId] = useState(habit?.profileId ?? me?.id ?? '')
   const [freq, setFreq] = useState<'daily' | 'days'>(habit?.scheduleDays.length ? 'days' : 'daily')
   const [days, setDays] = useState<number[]>(
     habit?.scheduleDays.length ? habit.scheduleDays : [1, 2, 3, 4, 5],
   )
   const [templateKey, setTemplateKey] = useState(habit?.templateKey)
+  const [times, setTimes] = useState<string[]>([])
+
+  useEffect(() => {
+    if (habit) void getLinkedReminder('habit', habit.id).then((r) => setTimes(r?.times ?? []))
+  }, [habit])
 
   const save = async () => {
     if (!title.trim()) return
-    await saveHabit({
+    const saved = await saveHabit({
       id: habit?.id,
       title: title.trim(),
       emoji,
       targetLabel: targetLabel.trim() || undefined,
       description: habit?.description,
       templateKey,
-      profileId: profileId || null,
+      profileId: habit?.profileId ?? me?.id ?? null,
       scheduleDays: freq === 'daily' ? [] : days,
       status: habit?.status ?? 'active',
       archivedAt: habit?.archivedAt ?? null,
     })
-    toast(habit ? 'Habit updated — history kept' : 'Habit created', { emoji })
+    await syncHabitReminder(saved, times.filter(Boolean))
+    toast(habit ? 'Habit updated — history kept' : 'Habit added', { emoji })
     close()
   }
 
@@ -166,23 +185,16 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
       }
     >
       {!habit && (
-        <Field label="Quick ideas">
+        <Field group label="Ideas">
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
-            {HABIT_TEMPLATES.filter(
-              (t) => !t.forKids && (family || (t.area !== 'family' && t.area !== 'kids')),
-            ).map((t) => (
+            {HABIT_TEMPLATES.filter((t) => t.key !== 'phone-free-night').map((t) => (
               <Chip
                 key={t.key}
-                active={title === t.title}
+                active={templateKey === t.key}
                 onClick={() => {
                   setTitle(t.title)
                   setEmoji(t.emoji)
-                  setTarget(t.targetLabel ?? '')
                   setTemplateKey(t.key)
-                  if (t.days?.length) {
-                    setFreq('days')
-                    setDays(t.days)
-                  }
                 }}
               >
                 {t.emoji} {t.title}
@@ -194,12 +206,15 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
       <Field label="Habit">
         <Input
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Morning walk"
+          onChange={(e) => {
+            setTitle(e.target.value)
+            setTemplateKey(undefined)
+          }}
+          placeholder="e.g. Read"
           maxLength={80}
         />
       </Field>
-      <Field label="Icon">
+      <Field group label="Icon">
         <div className="flex flex-wrap gap-1.5">
           {EMOJIS.map((e) => (
             <button
@@ -215,26 +230,24 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
           ))}
         </div>
       </Field>
-      <Field label="Target (optional)" hint="e.g. 20 minutes, 6 glasses">
+      <Field label="Your target (optional)" hint="In your own words, e.g. 10 pages, 20 minutes">
         <Input value={targetLabel} onChange={(e) => setTarget(e.target.value)} maxLength={40} />
       </Field>
-      <Field label="Frequency">
+      <Field label="How often">
         <Segmented
-          label="Frequency"
+          label="How often"
           value={freq}
           onChange={setFreq}
           options={[
             { value: 'daily', label: 'Every day' },
-            { value: 'days', label: 'Selected days' },
+            { value: 'days', label: 'Some days' },
           ]}
         />
       </Field>
       {freq === 'days' && <DayPicker value={days} onChange={setDays} />}
-      {family && (
-        <Field label="Whose habit?">
-          <ProfileSelect value={profileId} onChange={setProfileId} />
-        </Field>
-      )}
+      <Field group label="Remind me" hint="Quiet on days you've already done it">
+        <TimesEditor times={times} onChange={setTimes} label="Reminder time" />
+      </Field>
     </Sheet>
   )
 }
@@ -242,7 +255,6 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: 'event', label: '📅 Event' },
   { value: 'appointment', label: '🩺 Appointment' },
-  { value: 'school', label: '🎒 School' },
   { value: 'birthday', label: '🎂 Birthday' },
   { value: 'important', label: '⭐ Important date' },
 ]
@@ -252,25 +264,30 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
   const [title, setTitle] = useState(event?.title ?? '')
   const [localDate, setDate] = useState(event?.localDate ?? date ?? todayLocal())
   const [startTime, setStart] = useState(event?.startTime ?? '')
-  const [endTime, setEnd] = useState(event?.endTime ?? '')
   const [type, setType] = useState<EventType>(event?.type ?? 'event')
-  const [profileId, setProfileId] = useState(event?.profileId ?? '')
   const [repeatYearly, setYearly] = useState(event?.repeatYearly ?? false)
   const [notes, setNotes] = useState(event?.notes ?? '')
+  const [remind, setRemind] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (event)
+      void getLinkedReminder('event', event.id).then((r) => setRemind(r?.link?.before ?? null))
+  }, [event])
 
   const save = async () => {
     if (!title.trim() || !localDate) return
-    await saveEvent({
+    const saved = await saveEvent({
       id: event?.id,
       title: title.trim(),
       localDate,
       startTime: startTime || null,
-      endTime: endTime || null,
+      endTime: event?.endTime ?? null,
       type,
-      profileId: profileId || null,
+      profileId: event?.profileId ?? null,
       repeatYearly: repeatYearly || type === 'birthday',
       notes: notes.trim() || undefined,
     })
+    await syncEventReminder(saved, remind !== null && remind >= 0 && !saved.startTime ? -1 : remind)
     toast(event ? 'Event updated' : 'Event added', { emoji: '📅' })
     close()
   }
@@ -299,42 +316,37 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
         </>
       }
     >
-      <Field label="Title">
+      <Field label="What">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={100}
-          placeholder="e.g. School activity"
+          placeholder="e.g. Dentist"
         />
       </Field>
-      <Field label="Type">
-        <div className="flex flex-wrap gap-2">
-          {EVENT_TYPES.map((t) => (
-            <Chip key={t.value} active={type === t.value} onClick={() => setType(t.value)}>
-              {t.label}
-            </Chip>
-          ))}
-        </div>
-      </Field>
-      <Field label="Date">
-        <Input type="date" value={localDate} onChange={(e) => setDate(e.target.value)} />
-      </Field>
+      <div className="flex flex-wrap gap-2">
+        {EVENT_TYPES.map((t) => (
+          <Chip key={t.value} active={type === t.value} onClick={() => setType(t.value)}>
+            {t.label}
+          </Chip>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Start (optional)">
+        <Field label="Date">
+          <Input type="date" value={localDate} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Time (optional)">
           <Input type="time" value={startTime} onChange={(e) => setStart(e.target.value)} />
         </Field>
-        <Field label="End (optional)">
-          <Input type="time" value={endTime} onChange={(e) => setEnd(e.target.value)} />
-        </Field>
       </div>
-      <Field label="For">
-        <ProfileSelect value={profileId} onChange={setProfileId} />
+      <Field group label="Remind me">
+        <RemindPicker id="event-remind" value={remind} onChange={setRemind} hasTime={!!startTime} />
       </Field>
       {type !== 'birthday' && (
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm">Repeat every year</span>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm">Every year</span>
           <Toggle checked={repeatYearly} onChange={setYearly} label="Repeat every year" />
-        </div>
+        </label>
       )}
       <Field label="Notes (optional)">
         <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
@@ -343,171 +355,40 @@ export function EventSheet({ event, date }: { event?: CalendarEvent; date?: stri
   )
 }
 
-export function GoalSheet({ goal }: { goal?: Goal }) {
-  const close = useUI((s) => s.closeSheet)
-  const [title, setTitle] = useState(goal?.title ?? '')
-  const [description, setDesc] = useState(goal?.description ?? '')
-  const [emoji, setEmoji] = useState(goal?.emoji ?? '🎯')
-  const [profileId, setProfileId] = useState(goal?.profileId ?? '')
-  const [targetDate, setTarget] = useState(goal?.targetDate ?? '')
-  const [horizon, setHorizon] = useState<GoalHorizon>(goal?.horizon ?? 'month')
-  const [status, setStatus] = useState<GoalStatus>(goal?.status ?? 'active')
-
-  const save = async () => {
-    if (!title.trim()) return
-    await saveGoal({
-      id: goal?.id,
-      title: title.trim(),
-      description: description.trim() || undefined,
-      emoji,
-      profileId: profileId || null,
-      targetDate: targetDate || null,
-      horizon,
-      status,
-    })
-    toast(goal ? 'Goal updated' : 'Goal created', { emoji })
-    close()
-  }
-  return (
-    <Sheet
-      title={goal ? 'Edit goal' : 'New goal'}
-      onClose={close}
-      footer={
-        <>
-          {goal && (
-            <ConfirmButton
-              onConfirm={async () => {
-                await deleteGoal(goal.id)
-                toast('Goal deleted')
-                close()
-              }}
-              confirmText="Delete?"
-            >
-              <Trash2 size={16} />
-            </ConfirmButton>
-          )}
-          <Button className="flex-1" onClick={save} disabled={!title.trim()}>
-            Save
-          </Button>
-        </>
-      }
-    >
-      <div className="grid grid-cols-[64px_1fr] gap-3">
-        <Field label="Icon">
-          <Input
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            maxLength={4}
-            className="text-center"
-          />
-        </Field>
-        <Field label="Goal">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={100}
-            placeholder="e.g. Calmer mornings"
-          />
-        </Field>
-      </div>
-      <Field label="Plan">
-        <Segmented
-          label="Plan"
-          value={horizon}
-          onChange={setHorizon}
-          options={[
-            { value: 'week', label: 'This week' },
-            { value: 'month', label: 'This month' },
-            { value: 'long', label: 'Long-term' },
-          ]}
-        />
-      </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Target date">
-          <Input type="date" value={targetDate} onChange={(e) => setTarget(e.target.value)} />
-        </Field>
-        <Field label="Status">
-          <Select value={status} onChange={(e) => setStatus(e.target.value as GoalStatus)}>
-            <option value="active">Active</option>
-            <option value="achieved">Achieved 🎉</option>
-            <option value="paused">Paused</option>
-            <option value="dropped">Let go</option>
-          </Select>
-        </Field>
-      </div>
-      <Field label="Owner">
-        <ProfileSelect value={profileId} onChange={setProfileId} />
-      </Field>
-      <Field label="Why it matters (optional)">
-        <TextArea value={description} onChange={(e) => setDesc(e.target.value)} maxLength={500} />
-      </Field>
-    </Sheet>
-  )
-}
-
-const COLORS = [
-  '#e9dfd0',
-  '#dce9dc',
-  '#f0dfdf',
-  '#e6e2f1',
-  '#dfeaf0',
-  '#f4ead2',
-  '#e0efe9',
-  '#f2e3ec',
-]
-const AVATARS = ['🙂', '😊', '👩', '👨', '👧', '👦', '👵', '👴', '🧒', '👶', '🐶', '🐱']
+const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '🧑', '👵', '👴']
 
 export function ProfileSheet({ profile }: { profile?: Profile }) {
   const close = useUI((s) => s.closeSheet)
   const [name, setName] = useState(profile?.name ?? '')
   const [avatar, setAvatar] = useState(profile?.avatar ?? '🙂')
-  const [color, setColor] = useState(profile?.color ?? COLORS[1])
-  const [role, setRole] = useState(profile?.role ?? '')
   const save = async () => {
     if (!name.trim()) return
     await saveProfile({
       id: profile?.id,
       name: name.trim(),
       avatar: avatar || name.trim()[0].toUpperCase(),
-      color,
-      role: role.trim() || undefined,
-      isPrimary: profile?.isPrimary,
+      color: profile?.color ?? '#dce9dc',
+      role: profile?.role,
+      isPrimary: profile?.isPrimary ?? true,
       archivedAt: null,
     })
-    toast(profile ? 'Profile updated' : 'Profile added', { emoji: avatar })
+    toast('Saved', { emoji: avatar })
     close()
   }
   return (
     <Sheet
-      title={profile ? 'Edit profile' : 'Add family member'}
+      title="Your name"
       onClose={close}
       footer={
-        <>
-          {profile && !profile.isPrimary && (
-            <ConfirmButton
-              onConfirm={async () => {
-                await archiveProfile(profile.id)
-                toast('Profile removed')
-                close()
-              }}
-              confirmText="Remove?"
-            >
-              <Trash2 size={16} />
-            </ConfirmButton>
-          )}
-          <Button className="flex-1" onClick={save} disabled={!name.trim()}>
-            Save
-          </Button>
-        </>
+        <Button className="flex-1" onClick={save} disabled={!name.trim()}>
+          Save
+        </Button>
       }
     >
       <Field label="Name">
         <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
       </Field>
-      <Field label="Short description (optional)" hint="e.g. Personal, Learning & play">
-        <Input value={role} onChange={(e) => setRole(e.target.value)} maxLength={40} />
-      </Field>
-      <Field label="Avatar">
+      <Field group label="Picture">
         <div className="flex flex-wrap gap-1.5">
           {[name.trim()[0]?.toUpperCase() ?? 'A', ...AVATARS].map((a) => (
             <button
@@ -515,82 +396,56 @@ export function ProfileSheet({ profile }: { profile?: Profile }) {
               type="button"
               aria-pressed={avatar === a}
               onClick={() => setAvatar(a)}
-              className={`grid size-10 place-items-center rounded-full text-lg ${avatar === a ? 'ring-2 ring-sage' : ''}`}
-              style={{ background: color }}
+              className={`grid size-10 place-items-center rounded-full bg-[#dce9dc] text-lg ${avatar === a ? 'ring-2 ring-sage' : ''}`}
             >
               {a}
             </button>
           ))}
         </div>
       </Field>
-      <Field label="Colour">
-        <div className="flex flex-wrap gap-2">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              aria-label={`Colour ${c}`}
-              aria-pressed={color === c}
-              onClick={() => setColor(c)}
-              className={`size-9 rounded-full border border-line ${color === c ? 'ring-2 ring-sage ring-offset-2 ring-offset-surface' : ''}`}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
-      </Field>
-      <p className="text-[11px] text-muted">
-        Profiles live only on this device. There are no logins and nothing is shared online.
-      </p>
     </Sheet>
   )
 }
 
 const REMINDER_EMOJIS = [
+  '⏰',
   '💧',
   '🪑',
-  '👟',
-  '🙆',
   '👀',
-  '🌬️',
-  '🧘',
-  '🌙',
+  '⏸️',
   '☀️',
-  '😴',
   '💊',
+  '📞',
   '🍎',
   '🚶',
-  '🦷',
-  '📞',
-  '⏰',
+  '🌿',
+  '🔑',
+  '🧾',
+  '🌙',
 ]
 
 export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
-  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const [title, setTitle] = useState(reminder?.title ?? '')
   const [message, setMessage] = useState(reminder?.message ?? '')
   const [emoji, setEmoji] = useState(reminder?.emoji ?? '⏰')
-  const [kind, setKind] = useState(reminder?.kind ?? 'interval')
+  const [kind, setKind] = useState(reminder?.kind ?? 'times')
   const [intervalMinutes, setEvery] = useState(reminder?.intervalMinutes ?? 60)
   const [startTime, setStart] = useState(reminder?.startTime ?? '09:00')
   const [endTime, setEnd] = useState(reminder?.endTime ?? '20:00')
-  const [times, setTimes] = useState<string[]>(reminder?.times?.length ? reminder.times : ['08:00'])
+  const [times, setTimes] = useState<string[]>(reminder?.times?.length ? reminder.times : ['09:00'])
   const [days, setDays] = useState<number[]>(reminder?.days ?? [])
   const [priority, setPriority] = useState<ReminderPriority>(reminder?.priority ?? 'normal')
-  const [audience, setAudience] = useState<ReminderAudience>(reminder?.audience ?? 'me')
-  const [profileId, setProfileId] = useState(reminder?.profileId ?? '')
 
   const save = async () => {
     if (!title.trim()) return
     await saveReminder({
-      priority,
-      audience,
-      profileId: profileId || null,
       id: reminder?.id,
       title: title.trim(),
       message: message.trim() || title.trim(),
       emoji,
       kind,
+      priority,
       intervalMinutes: kind === 'interval' ? intervalMinutes : undefined,
       startTime: kind === 'interval' ? startTime : undefined,
       endTime: kind === 'interval' ? endTime : undefined,
@@ -601,13 +456,13 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
       lastFiredSlot: new Date().toISOString(),
       snoozedUntil: null,
     })
-    toast(reminder ? 'Nudge updated' : 'Nudge created', { emoji })
+    toast(reminder ? 'Reminder updated' : 'Reminder added', { emoji })
     close()
   }
 
   return (
     <Sheet
-      title={reminder ? 'Edit nudge' : 'New nudge'}
+      title={reminder ? 'Edit reminder' : 'New reminder'}
       onClose={close}
       footer={
         <>
@@ -615,7 +470,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
             <ConfirmButton
               onConfirm={async () => {
                 await deleteReminder(reminder.id)
-                toast('Nudge deleted')
+                toast('Reminder deleted')
                 close()
               }}
               confirmText="Delete?"
@@ -629,55 +484,23 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
         </>
       }
     >
-      <Field label="Nudge">
+      <Field label="Reminder">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={60}
-          placeholder="e.g. Drink water"
+          placeholder="e.g. Take my tablet"
         />
       </Field>
-      {family && (
-        <Field label="Who is it for?">
-          <Segmented
-            label="Who is it for"
-            value={audience}
-            onChange={setAudience}
-            options={[
-              { value: 'me', label: '🙂 Me' },
-              { value: 'family', label: '💛 Family' },
-              { value: 'kids', label: '🧒 Kids' },
-            ]}
-          />
-        </Field>
-      )}
-      {family && audience !== 'me' && (
-        <Field label="Person (optional)">
-          <ProfileSelect value={profileId} onChange={setProfileId} />
-        </Field>
-      )}
-      <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3">
-        <span className="text-sm">
-          <b>Important</b>
-          <span className="block text-[11px] text-muted">
-            Stays on screen until you tap Done, louder chime, comes through in phone-free time
-          </span>
-        </span>
-        <Toggle
-          checked={priority === 'high'}
-          onChange={(v) => setPriority(v ? 'high' : 'normal')}
-          label="Important nudge"
-        />
-      </label>
-      <Field label="Message">
+      <Field label="Message (optional)">
         <Input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           maxLength={140}
-          placeholder="A kind nudge…"
+          placeholder="A kind reminder…"
         />
       </Field>
-      <Field label="Icon">
+      <Field group label="Icon">
         <div className="flex flex-wrap gap-1.5">
           {REMINDER_EMOJIS.map((e) => (
             <button
@@ -693,22 +516,20 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           ))}
         </div>
       </Field>
-      <Field label="Schedule">
-        <Segmented
-          label="Schedule type"
-          value={kind}
-          onChange={setKind}
-          options={[
-            { value: 'interval', label: 'Repeat every…' },
-            { value: 'times', label: 'At set times' },
-          ]}
-        />
-      </Field>
+      <Segmented
+        label="Schedule type"
+        value={kind}
+        onChange={setKind}
+        options={[
+          { value: 'times', label: 'At set times' },
+          { value: 'interval', label: 'Repeat every…' },
+        ]}
+      />
       {kind === 'interval' ? (
         <>
           <Field label="Every">
             <Select value={intervalMinutes} onChange={(e) => setEvery(Number(e.target.value))}>
-              {[15, 20, 30, 45, 60, 90, 120, 180].map((m) => (
+              {[30, 45, 60, 90, 120, 180].map((m) => (
                 <option key={m} value={m}>
                   {m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}`}
                 </option>
@@ -725,38 +546,28 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           </div>
         </>
       ) : (
-        <Field label="Times">
-          <div className="grid gap-2">
-            {times.map((t, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  type="time"
-                  value={t}
-                  onChange={(e) => setTimes(times.map((x, j) => (j === i ? e.target.value : x)))}
-                  aria-label={`Time ${i + 1}`}
-                />
-                {times.length > 1 && (
-                  <Button
-                    variant="outline"
-                    aria-label="Remove time"
-                    onClick={() => setTimes(times.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 size={15} />
-                  </Button>
-                )}
-              </div>
-            ))}
-            {times.length < 8 && (
-              <Button variant="soft" size="sm" onClick={() => setTimes([...times, '12:00'])}>
-                + Add time
-              </Button>
-            )}
-          </div>
-        </Field>
+        <TimesEditor
+          times={times}
+          onChange={(t) => setTimes(t.length ? t : ['09:00'])}
+          label="Time"
+        />
       )}
-      <Field label="Days" hint="None selected = every day">
+      <Field group label="Days" hint="None selected = every day">
         <DayPicker value={days} onChange={setDays} />
       </Field>
+      <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3">
+        <span className="text-sm">
+          <b>Important</b>
+          <span className="block text-[11px] text-muted">
+            Stays on screen until you tap Done, and comes through in phone-free time
+          </span>
+        </span>
+        <Toggle
+          checked={priority === 'high'}
+          onChange={(v) => setPriority(v ? 'high' : 'normal')}
+          label="Important reminder"
+        />
+      </label>
     </Sheet>
   )
 }

@@ -256,16 +256,14 @@ Daily snapshot policy:
 
 ### Direction update (owner feedback, Nov 2026)
 
-- **Self-management first.** Family features (Family tab, assigning, kids/family nudges) are hidden behind an optional _family mode_.
-- **Mobile only, minimal navigation:** 3 tabs (Today · Plan · Routines), plus Family in family mode. Settings is one short page behind the avatar. Prefer one page with sections over sub-tabs. Keep padding tight.
-- **Local-storage app, not an "offline" app.** The app loads from the web; user data stays on the device.
+- **One person, one phone.** No family features for now (data model keeps `profileId` so family can return later, driven by real usage).
+- **Mobile only, minimal navigation:** 3 tabs (Today · Plan · Routines). Settings is one short page behind the avatar. Prefer one page with sections over sub-tabs. Keep padding tight.
+- **Connected reminders:** habits, to-dos and events carry their own reminders (`Reminder.link`). They only fire when the item is due and not done; Done on the reminder completes the item; deleting the item deletes its reminder.
+- **Predefined content must suit anyone.** No niche presets (e.g. footwear, kids, work-only).
+- **No health advice.** No guided exercise, yoga or breathing content. Health items are neutral habits, never pre-ticked.
 - **No sample data.** A 30-second auto-playing tour shows examples without saving anything.
-- **No health advice.** No guided exercise, yoga or breathing content. Health items are neutral habits to track, never pre-ticked, with no prescribed durations.
-- **Positive energy:** daily thought, cheerful nudge lines, celebrations, never shaming.
-- **Nudges:** important vs gentle, playful animated cards. They only fire while the app is alive (no push server).
-- **Digital wellbeing:** phone-free evenings (default 10 PM): nudges, habit, mute, in-app guard, morning check-in.
-- **Setup wizard** suggests and creates habits, nudges and to-dos from a few answers; re-runnable.
+- **Local-storage app:** loads from the web; user data stays on the device. Today nudges toward backups and installing.
 - **Deploy only from `main`** (Vercel `ignoreCommand`).
-- **Proposed, not built:** optional sharing via the user's own Google Sheet with client-side encryption.
+- **Proposed, not built:** always-on reminders via Web Push with a privacy-preserving "tick" server; family sharing via the user's own encrypted Google Sheet.
 
 **Deployment target:** Public GitHub repository + Vercel free tier (deploys from `main` only). Deploy static assets only; no secrets or personal data in the repository.

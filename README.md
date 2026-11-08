@@ -6,47 +6,57 @@ DayNest is a mobile web app. The app loads from the web (Vercel); **everything y
 
 ## What's inside: 3 tabs
 
-DayNest is for **managing your own day**. Family features stay hidden unless you switch them on.
+DayNest is for **managing your own day** on one phone.
 
-| Tab          | What it does                                                                                                                                                                                  |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Today**    | Greeting, a daily positive thought, and **one list** with today's to-dos and habits. Then what's coming up next (a nudge or an event). Morning check-in: _“Did you have a phone-free night?”_ |
-| **Plan**     | **Upcoming** (next 2 weeks + someday ideas) · **Calendar** · **Goals**                                                                                                                        |
-| **Routines** | One page: the **Phone-free evenings** switch, **My habits**, **My nudges**                                                                                                                    |
+| Tab          | What it does                                                                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Today**    | Greeting, a daily positive thought, one helpful card for the moment, then **one list** with today's to-dos and habits, and what's coming up. |
+| **Plan**     | **Upcoming** (next 2 weeks + someday ideas, done tucked away) · **Calendar** (events, appointments, birthdays)                               |
+| **Routines** | One page: the **Phone-free evenings** switch, **My habits**, **My reminders** (stand-alone nudges)                                           |
 
-**Settings** (behind your avatar) is one short page: name, _I also plan for my family_, theme, chime, backup, tour, setup, privacy.
+**Settings** (behind your avatar) is one short page: name, theme, chime, backup, tour, setup again, privacy.
 
-**Family mode (optional).** Switching on _I also plan for my family_ adds a **Family** tab, assigning to-dos and habits to people, and kids & family nudges.
+### Everything is connected 🔔
+
+- A **habit** can have reminder times. The reminder only fires on the habit's days and stays quiet once you've done it.
+- A **to-do** with a time can remind you _at the time_, _15 min_ or _1 hour before_. Any to-do can remind you _the morning of_.
+- An **event** can remind you the same way.
+- Tapping **Mark done ✓** on a habit or to-do reminder ticks that item off.
+- Deleting a habit, to-do or event removes its reminder too.
+
+### Helper card on Today (one at a time)
+
+1. Evening heads-up before phone-free time, or the morning _“Did you have a phone-free night?”_
+2. After 6 PM: _“2 to-dos still open — move to tomorrow?”_
+3. A backup reminder if the last backup is over 14 days old (your data lives only on this phone).
+4. _Add DayNest to your home screen_, with an Install button on Android or Share → Add to Home Screen steps on iPhone.
 
 ### First run: tour + setup wizard 🪄
 
-- **30-second tour**: auto-playing example screens (like a short video). Nothing is saved; there is no sample data.
-- **Setup wizard**: your name → (optional) family members → what you'd like help with → wake-up and phone-down times → suggestions you tick → done. Re-run anytime from Settings without getting duplicates.
+- **30-second tour**: auto-playing example screens. Nothing is saved; there is no sample data.
+- **Setup**: name → what would help (organised day, less screen time, body basics, calm mind, learning) → wake-up and phone-down times → suggestions you tick, with reminder times already tuned → done.
 
 ### No health advice
 
-DayNest doesn't coach exercise, yoga or breathing. Health items are **habits you track your own way**: no prescribed durations, never pre-ticked, with a note to ask a doctor before starting something new. Only things that follow from your own answers (like the phone-down time you chose) are pre-ticked.
+DayNest doesn't coach exercise, yoga or breathing. Health items are habits you track your own way: no prescribed durations, never pre-ticked, and a note to ask a doctor before starting something new.
 
-### Nudges that make you smile
+### Reminder ideas that suit anyone
 
-Ideas include _drink water, sit straight, wear footwear, stand up for a bit, time to move, step outside, take a pause, quiet time, rest your eyes, plan tomorrow, focus block_. With family mode on there are also kids' and family nudges. Or create your own (every N minutes in a window, or at set times, on chosen days).
-
-- **Important** nudges pop up in the middle of the screen with an animated card, stay until you tap Done, chime louder, and still come through during phone-free time.
-- **Gentle** nudges drop in from the top with a playful animation and a cheerful line, then fade away.
+_Drink water, posture check, rest your eyes, take a pause, step outside_, plus the phone-free pair. Anything personal you create yourself (e.g. _take my tablet_). **Important** reminders stay on screen until you tap Done and still come through during phone-free time.
 
 ### Phone-free evenings 🌙
 
-One switch sets everything up: a _“Phone-free soon”_ nudge 15 minutes before, an **important** _“Phone down, heart up”_ nudge at your chosen time (default 10 PM), a **No phone after 10 PM** habit, and quiet nudges until morning. Opening DayNest during that time shows a calm reminder screen (with an honest _“just 5 minutes”_ option). Pair it with Android _Bedtime mode_ or iPhone _Downtime_, which can actually limit the phone; a web app can't.
+One switch sets everything up: a heads-up 15 minutes before, an important _“Phone down, heart up”_ reminder (default 10 PM), a **No phone after 10 PM** habit, quiet reminders until morning, and a calm screen if you open DayNest late. Pair it with Android _Bedtime mode_ or iPhone _Downtime_, which can actually limit the phone.
 
-### Do notifications work when the app is closed?
+### Do reminders fire when the app is closed?
 
-**No, not reliably.** There's no server, so DayNest can't wake itself up. Nudges appear while DayNest is open or still running in the background; installing it to the home screen helps. If the app is fully closed, nothing fires. A nudge missed by less than 10 minutes shows when you come back. Reliable closed-app alerts would need either a push server (which would have to know your reminder times) or your phone's own alarms/calendar.
+**Not yet.** With no server, DayNest can only remind you while it's open or still running in the background; installing it to the home screen helps. Reliable closed-app alerts need **Web Push** from a small server. See _Always-on reminders_ in the plan; this is proposed, not built.
 
 ## Your data
 
 - Saved only in this phone's browser storage. Clearing browser data erases it, so use **Settings → Backup** (JSON export/import with preview, merge or replace, all-or-nothing; optional daily folder snapshots on Chrome/Android).
 - Browser storage isn't encrypted; anyone using the phone's browser can open DayNest.
-- Sharing via your own Google Sheet (end-to-end encrypted) is a **proposed** idea, not built.
+- Family sharing (e.g. via your own encrypted Google Sheet) is parked until there's real usage.
 
 ## Development
 
@@ -61,11 +71,11 @@ React 19 · TypeScript · Vite · Tailwind CSS v4 · Dexie (IndexedDB) · Zustan
 
 ```
 src/
-  db/          Dexie schema, types, actions, nudge presets, setup apply
+  db/          Dexie schema, types, actions, reminder presets, reminder links, setup apply
   lib/         dates (local YYYY-MM-DD), recurrence, streaks, nudge scheduling, phone-free hours,
                setup suggestions, habit templates, backup, positive content
   components/  ui primitives, tabs, tour, shell & nav, nudge host, phone-free guard, editor sheets
-  screens/     Today, Plan, Routines, Family (optional), Settings, Setup (wizard)
+  screens/     Today, Plan, Routines, Settings, Setup (wizard)
 ```
 
 ## Deploy (Vercel, main branch only)

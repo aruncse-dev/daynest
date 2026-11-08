@@ -4,70 +4,37 @@ import { addLocalDays, nowIso, todayLocal, weekdayOf } from '@/lib/date'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import type { SetupAnswers, Suggestion } from '@/lib/suggest'
 import { getSetting, setSetting } from './actions'
+import { syncHabitReminder, syncTaskReminder } from './links'
+import type { Habit, Task } from './types'
 
-export interface MemberDraft {
-  name: string
-  avatar: string
-  color: string
-  role: string
-  kind: 'partner' | 'child' | 'other'
-}
-
-/** Create profiles (skipping names that already exist). Returns ids of the main profile and children. */
-export async function ensureProfiles(myName: string, myAvatar: string, members: MemberDraft[]) {
+/** Create or rename the one profile on this phone. Returns its id. */
+export async function ensureProfile(name: string, avatar: string) {
   const now = nowIso()
-  const existing = await db.profiles.filter((p) => !p.archivedAt).toArray()
-  let me = existing.find((p) => p.isPrimary)
+  const me = (await db.profiles.filter((p) => !p.archivedAt).toArray()).find((p) => p.isPrimary)
   if (!me) {
-    me = {
-      id: uuid(),
-      name: myName.trim() || 'Me',
-      avatar: myAvatar || (myName.trim()[0] ?? 'M').toUpperCase(),
-      color: '#dce9dc',
-      role: 'Personal',
-      isPrimary: true,
-      createdAt: now,
-      updatedAt: now,
-    }
-    await db.profiles.add(me)
-  } else if (myName.trim() && myName.trim() !== me.name) {
-    await db.profiles.update(me.id, {
-      name: myName.trim(),
-      avatar: myAvatar || me.avatar,
-      updatedAt: now,
-    })
-  }
-  const kidIds = existing.filter((p) => p.role === 'Child').map((p) => p.id)
-  let order = 1
-  for (const m of members) {
-    // stagger createdAt so profiles keep the order they were entered in
-    const createdAt = new Date(Date.now() + order++).toISOString()
-    if (
-      !m.name.trim() ||
-      existing.some((p) => p.name.toLowerCase() === m.name.trim().toLowerCase())
-    )
-      continue
     const id = uuid()
     await db.profiles.add({
       id,
-      name: m.name.trim(),
-      avatar: m.avatar,
-      color: m.color,
-      role: m.role,
-      createdAt,
-      updatedAt: createdAt,
+      name: name.trim() || 'Me',
+      avatar: avatar || (name.trim()[0] ?? 'M').toUpperCase(),
+      color: '#dce9dc',
+      isPrimary: true,
+      createdAt: now,
+      updatedAt: now,
     })
-    if (m.kind === 'child') kidIds.push(id)
+    return id
   }
-  return { meId: me.id, kidIds }
+  if (name.trim() && (name.trim() !== me.name || (avatar && avatar !== me.avatar)))
+    await db.profiles.update(me.id, {
+      name: name.trim(),
+      avatar: avatar || me.avatar,
+      updatedAt: now,
+    })
+  return me.id
 }
 
 /** Create the chosen suggestions. Idempotent: re-running the wizard won't duplicate items. */
-export async function applySuggestions(
-  chosen: Suggestion[],
-  answers: SetupAnswers,
-  ids: { meId: string; kidIds: string[] },
-) {
+export async function applySuggestions(chosen: Suggestion[], answers: SetupAnswers, meId: string) {
   const now = nowIso()
   const today = todayLocal()
   const habits = await db.habits.toArray()
@@ -77,32 +44,23 @@ export async function applySuggestions(
 
   for (const s of chosen) {
     if (s.kind === 'habit') {
-      const t = s.template
-      const owners = t.forKids ? ids.kidIds : [t.shared ? null : ids.meId]
-      for (const profileId of owners) {
-        if (
-          habits.some(
-            (h) =>
-              h.templateKey === t.key &&
-              (h.profileId ?? null) === profileId &&
-              h.status !== 'archived',
-          )
-        )
-          continue
-        await db.habits.add({
-          id: uuid(),
-          title: s.title,
-          emoji: t.emoji,
-          targetLabel: t.targetLabel,
-          scheduleDays: t.days ?? [],
-          profileId,
-          templateKey: t.key,
-          status: 'active',
-          createdAt: now,
-          updatedAt: now,
-        })
-        created++
+      if (habits.some((h) => h.templateKey === s.template.key && h.status !== 'archived')) continue
+      const habit: Habit = {
+        id: uuid(),
+        title: s.title,
+        emoji: s.emoji,
+        scheduleDays: s.template.days ?? [],
+        profileId: meId,
+        templateKey: s.template.key,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
       }
+      await db.habits.add(habit)
+      // the phone-free habit is reminded by the phone-free nudges instead
+      if (s.remindAt && s.template.key !== 'phone-free-night')
+        await syncHabitReminder(habit, [s.remindAt])
+      created++
     } else if (s.kind === 'nudge') {
       const { area: _area, ...preset } = s.preset
       const existing = reminders.find((r) => r.presetKey === preset.presetKey)
@@ -128,19 +86,21 @@ export async function applySuggestions(
       if (tasks.some((t) => t.title === s.title && t.recurrenceRule)) continue
       let start = today
       while (weekdayOf(start) !== s.weekday) start = addLocalDays(start, 1)
-      await db.tasks.add({
+      const task: Task = {
         id: uuid(),
         title: s.title,
         priority: 'normal',
-        category: s.area === 'family' ? 'Family' : 'Home',
-        profileId: s.area === 'family' ? null : ids.meId,
+        category: 'Personal',
+        profileId: meId,
         dueDate: start,
         dueTime: s.time ?? null,
         recurrenceRule: s.rule,
         status: 'open',
         createdAt: now,
         updatedAt: now,
-      })
+      }
+      await db.tasks.add(task)
+      if (s.remindAt) await syncTaskReminder(task, 0)
       created++
     }
   }

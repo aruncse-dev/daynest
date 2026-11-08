@@ -225,7 +225,7 @@ const SCENES = [
     Body: HabitScene,
   },
   {
-    title: 'Friendly nudges',
+    title: 'Friendly reminders',
     sub: 'Gentle reminders that make you smile. Important ones stay until you tap Done.',
     Body: NudgeScene,
   },

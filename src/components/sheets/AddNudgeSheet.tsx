@@ -3,7 +3,6 @@ import { db } from '@/db/db'
 import { saveReminder } from '@/db/actions'
 import { REMINDER_PRESETS } from '@/db/reminderPresets'
 import { describeSchedule } from '@/lib/reminders'
-import { useFamilyMode } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import { Button, Sheet, Tag } from '@/components/ui'
 
@@ -11,17 +10,14 @@ import { Button, Sheet, Tag } from '@/components/ui'
 export function AddNudgeSheet() {
   const close = useUI((s) => s.closeSheet)
   const openSheet = useUI((s) => s.openSheet)
-  const family = useFamilyMode()
   const existing = useLiveQuery(() => db.reminders.toArray(), [])
   const ideas = REMINDER_PRESETS.filter(
     (p) =>
-      !p.presetKey.startsWith('phonefree') &&
-      (family || (p.audience ?? 'me') === 'me') &&
-      !existing?.some((r) => r.presetKey === p.presetKey),
+      !p.presetKey.startsWith('phonefree') && !existing?.some((r) => r.presetKey === p.presetKey),
   )
   return (
     <Sheet
-      title="Add a nudge"
+      title="Add a reminder"
       onClose={close}
       footer={
         <Button className="flex-1" onClick={() => openSheet({ type: 'reminder' })}>

@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Reminder } from '@/db/types'
 import { db } from '@/db/db'
-import { nowIso } from '@/lib/date'
+import { nowIso, todayLocal } from '@/lib/date'
+import { toggleHabit, toggleTask } from '@/db/actions'
+import { linkedStillDue } from '@/db/links'
 import { smileLine } from '@/lib/wellness'
-import { useUI } from '@/store/ui'
+import { toast, useUI } from '@/store/ui'
 import { cx } from '@/components/ui'
 
 const NIGHT_KEYS = new Set(['phonefree', 'phonefree-soon', 'story', 'meditate', 'sleep'])
@@ -96,7 +98,24 @@ function Stars() {
 function useActions(r: Reminder) {
   const dismiss = useUI((s) => s.dismissReminder)
   return {
-    done: () => dismiss(r.id),
+    /** Done on a habit/to-do reminder also completes that item for today. */
+    done: async () => {
+      dismiss(r.id)
+      if (!r.link) return
+      const today = todayLocal()
+      if (r.link.type === 'habit') {
+        const already = await db.habitEntries
+          .where('[habitId+localDate]')
+          .equals([r.link.id, today])
+          .first()
+        if (!already) await toggleHabit(r.link.id, today)
+        toast(`${r.title} — done for today!`, { emoji: '🌟' })
+      } else if (r.link.type === 'task') {
+        const task = await db.tasks.get(r.link.id)
+        if (task && (await linkedStillDue(r, today))) await toggleTask(task, today)
+        if (task) toast(`${r.title} — done!`, { emoji: '✅' })
+      }
+    },
     snooze: async () => {
       await db.reminders.update(r.id, {
         snoozedUntil: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -151,7 +170,7 @@ function HighPriorityNudge({ reminder: r }: { reminder: Reminder }) {
                 style.theme === 'night' ? 'bg-white text-[#1f2a44]' : 'bg-sage text-white',
               )}
             >
-              Done ✓
+              {r.link && r.link.type !== 'event' ? 'Mark done ✓' : 'Done ✓'}
             </button>
             <button
               type="button"
@@ -172,10 +191,12 @@ function GentleNudge({ reminder: r }: { reminder: Reminder }) {
   const style = nudgeStyle(r)
   const line = useMemo(() => smileLine(style.smile), [style.smile])
   const { done, snooze } = useActions(r)
+  const dismiss = useUI((s) => s.dismissReminder)
   useEffect(() => {
-    const t = setTimeout(done, 90_000) // gentle nudges fade away on their own
+    // gentle nudges fade away on their own (without completing anything)
+    const t = setTimeout(() => dismiss(r.id), 90_000)
     return () => clearTimeout(t)
-  }, [done])
+  }, [dismiss, r.id])
   return (
     <div
       role="alert"
@@ -209,7 +230,7 @@ function GentleNudge({ reminder: r }: { reminder: Reminder }) {
               )}
               onClick={done}
             >
-              Done ✓
+              {r.link && r.link.type !== 'event' ? 'Mark done ✓' : 'Done ✓'}
             </button>
             <button
               type="button"

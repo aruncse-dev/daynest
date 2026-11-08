@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CalendarEvent, Goal, Habit, Profile, Reminder, Task } from '@/db/types'
+import type { CalendarEvent, Habit, Profile, Reminder, Task } from '@/db/types'
 import type { LocalDate } from '@/lib/date'
 
 /** Transient UI state only. IndexedDB (Dexie) is the source of truth for data. */
@@ -9,7 +9,6 @@ export type SheetState =
   | { type: 'habit'; habit?: Habit }
   | { type: 'habitDetail'; habitId: string }
   | { type: 'event'; event?: CalendarEvent; date?: LocalDate }
-  | { type: 'goal'; goal?: Goal }
   | { type: 'profile'; profile?: Profile }
   | { type: 'reminder'; reminder?: Reminder }
   | { type: 'addNudge' }

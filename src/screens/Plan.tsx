@@ -1,10 +1,8 @@
-import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
 import { db } from '@/db/db'
 import { saveTask } from '@/db/actions'
-import type { Goal, GoalHorizon, Task } from '@/db/types'
 import {
   addLocalDays,
   formatLocal,
@@ -16,8 +14,7 @@ import {
   WEEKDAY_LETTER,
   WEEK_ORDER,
 } from '@/lib/date'
-import { goalProgress } from '@/lib/goals'
-import { useProfileMap, useToday } from '@/lib/hooks'
+import { useToday } from '@/lib/hooks'
 import {
   eventsBetween,
   sortDayTasks,
@@ -27,21 +24,11 @@ import {
 } from '@/lib/queries'
 import { taskAppearsOn } from '@/lib/recurrence'
 import { useUI } from '@/store/ui'
-import {
-  Avatar,
-  Button,
-  EmptyState,
-  LinkButton,
-  Panel,
-  Ring,
-  Skeleton,
-  Tag,
-  cx,
-} from '@/components/ui'
+import { Button, EmptyState, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
 import { EventRow, TaskRow } from '@/components/rows'
-import { ChipTabs, TabBar, useTab } from '@/components/Tabs'
+import { TabBar, useTab } from '@/components/Tabs'
 
-const TABS = ['tasks', 'calendar', 'goals'] as const
+const TABS = ['tasks', 'calendar'] as const
 
 export function Plan() {
   const [tab, setTab] = useTab(TABS, 'tasks')
@@ -55,12 +42,10 @@ export function Plan() {
         tabs={[
           { value: 'tasks', label: 'Upcoming' },
           { value: 'calendar', label: 'Calendar' },
-          { value: 'goals', label: 'Goals' },
         ]}
       />
       {tab === 'tasks' && <TasksTab />}
       {tab === 'calendar' && <CalendarTab />}
-      {tab === 'goals' && <GoalsTab />}
     </div>
   )
 }
@@ -382,131 +367,6 @@ function DayAgenda({ date, onAddEvent }: { date: string; onAddEvent: () => void 
             <TaskRow key={t.task.id} item={t} />
           ))}
         </>
-      )}
-    </Panel>
-  )
-}
-
-/* ---------------- Goals ---------------- */
-
-function GoalsTab() {
-  const [horizon, setHorizon] = useState<GoalHorizon>('month')
-  const openSheet = useUI((s) => s.openSheet)
-  const data = useLiveQuery(
-    async () => ({
-      goals: await db.goals.toArray(),
-      tasks: await db.tasks.filter((t) => !!t.goalId).toArray(),
-    }),
-    [],
-  )
-  const goals =
-    data?.goals.filter(
-      (g) => g.horizon === horizon && (g.status === 'active' || g.status === 'paused'),
-    ) ?? []
-  const finished = data?.goals.filter((g) => g.status === 'achieved') ?? []
-  return (
-    <>
-      <div className="flex items-start justify-between gap-2">
-        <ChipTabs<GoalHorizon>
-          label="Plan horizon"
-          value={horizon}
-          onChange={setHorizon}
-          options={[
-            { value: 'week', label: 'This week' },
-            { value: 'month', label: 'This month' },
-            { value: 'long', label: 'Long-term' },
-          ]}
-        />
-      </div>
-      <div className="grid gap-3">
-        {goals.length === 0 && (
-          <Panel>
-            <EmptyState
-              emoji="🎯"
-              title="No goals here yet"
-              text="One gentle goal is plenty — like “Family walk every weekend”."
-            />
-          </Panel>
-        )}
-        {goals.map((g) => (
-          <GoalCard
-            key={g.id}
-            goal={g}
-            tasks={data?.tasks.filter((t) => t.goalId === g.id) ?? []}
-          />
-        ))}
-        <Button variant="soft" onClick={() => openSheet({ type: 'goal' })}>
-          + New goal
-        </Button>
-        {finished.length > 0 && (
-          <p className="text-center text-xs text-muted">
-            🎉 {finished.length} goal{finished.length > 1 ? 's' : ''} achieved so far
-          </p>
-        )}
-        <p className="text-center text-[11px] text-muted">
-          Progress = finished one-off steps ÷ all one-off steps. Repeating to-dos support a goal but
-          aren't counted.
-        </p>
-      </div>
-    </>
-  )
-}
-
-function GoalCard({ goal, tasks }: { goal: Goal; tasks: Task[] }) {
-  const today = useToday()
-  const openSheet = useUI((s) => s.openSheet)
-  const owner = useProfileMap().get(goal.profileId ?? '')
-  const p = goalProgress(tasks)
-  const [open, setOpen] = useState(false)
-  return (
-    <Panel>
-      <div className="flex items-center gap-3">
-        <Ring value={p.ratio} size={52}>
-          {p.total ? `${Math.round(p.ratio * 100)}%` : (goal.emoji ?? '🎯')}
-        </Ring>
-        <button
-          type="button"
-          className="min-w-0 flex-1 text-left"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-        >
-          <div className="truncate text-sm font-bold">
-            {goal.emoji} {goal.title}
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted">
-            {owner && <Avatar avatar={owner.avatar} color={owner.color} size={16} />}
-            {p.done}/{p.total} steps
-            {goal.targetDate ? ` · by ${formatLocal(goal.targetDate, 'd MMM')}` : ''}
-            {goal.status === 'paused' && <Tag tone="muted">Paused</Tag>}
-          </div>
-        </button>
-        <LinkButton onClick={() => openSheet({ type: 'goal', goal })}>Edit</LinkButton>
-      </div>
-      {open && (
-        <div className="mt-2">
-          {tasks
-            .filter((t) => t.status !== 'archived')
-            .map((t) => (
-              <TaskRow
-                key={t.id}
-                item={{
-                  task: t,
-                  date: t.dueDate ?? today,
-                  done: t.status === 'done',
-                  overdue: false,
-                }}
-                showDate
-              />
-            ))}
-          <LinkButton
-            className="mt-2"
-            onClick={() =>
-              openSheet({ type: 'task', defaults: { goalId: goal.id, dueDate: null } })
-            }
-          >
-            + Add a step
-          </LinkButton>
-        </div>
       )}
     </Panel>
   )

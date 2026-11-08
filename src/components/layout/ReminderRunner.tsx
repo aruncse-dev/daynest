@@ -6,6 +6,7 @@ import { DEFAULT_QUIET, isQuietTime, QUIET_KEY, type QuietHours } from '@/lib/qu
 import { chime, vibrate } from '@/lib/sound'
 import { useUI } from '@/store/ui'
 import { getSetting } from '@/db/actions'
+import { linkedStillDue } from '@/db/links'
 
 const TICK_MS = 20_000
 
@@ -34,6 +35,8 @@ export function ReminderRunner() {
             lastFiredSlot: due.snooze ? r.lastFiredSlot : due.slot.toISOString(),
             snoozedUntil: null,
           })
+          // a habit/to-do reminder stays quiet if the item isn't due today or is already done
+          if (r.link && !(await linkedStillDue(r))) continue
           const high = r.priority === 'high'
           if (muted && !high) continue
           useUI.getState().pushReminder(r)

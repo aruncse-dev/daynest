@@ -1,13 +1,11 @@
-import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect, useState } from 'react'
 import { Archive, Trash2 } from 'lucide-react'
-import { db } from '@/db/db'
 import { archiveTask, deleteTask, saveTask } from '@/db/actions'
-import type { Priority, RecurrenceRule, Task } from '@/db/types'
+import { getLinkedReminder, MORNING_OF, syncTaskReminder } from '@/db/links'
+import type { RecurrenceRule, Task } from '@/db/types'
 import { addLocalDays, todayLocal } from '@/lib/date'
-import { useFamilyMode, usePrimaryProfile, useProfiles } from '@/lib/hooks'
+import { usePrimaryProfile } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
-import { CATEGORIES } from '@/lib/goals'
 import {
   Button,
   Chip,
@@ -18,27 +16,19 @@ import {
   Select,
   Sheet,
   TextArea,
+  Toggle,
 } from '@/components/ui'
-
-const PRIORITIES: { value: Priority; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'important', label: 'Important' },
-  { value: 'high', label: 'High' },
-]
+import { RemindPicker } from './RemindPicker'
 
 type RepeatKey = 'none' | RecurrenceRule['type']
 
 export function QuickAddSheet() {
-  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const openSheet = useUI((s) => s.openSheet)
   const me = usePrimaryProfile()
-  const profiles = useProfiles() ?? []
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState<'today' | 'tomorrow' | 'someday'>('today')
-  const [profileId, setProfileId] = useState<string | null>(null)
-  const [priority, setPriority] = useState<Priority>('normal')
+  const [important, setImportant] = useState(false)
 
   const submit = async () => {
     if (!title.trim()) return
@@ -46,18 +36,18 @@ export function QuickAddSheet() {
     await saveTask({
       title: title.trim(),
       dueDate: when === 'today' ? today : when === 'tomorrow' ? addLocalDays(today, 1) : null,
-      priority,
+      priority: important ? 'high' : 'normal',
       category: 'Personal',
-      profileId: profileId ?? me?.id ?? null,
+      profileId: me?.id ?? null,
       status: 'open',
     })
-    toast('Task added', { emoji: '✅' })
+    toast('To-do added', { emoji: '✅' })
     close()
   }
 
   return (
     <Sheet
-      title="Add a task"
+      title="Add a to-do"
       onClose={close}
       footer={
         <>
@@ -65,10 +55,10 @@ export function QuickAddSheet() {
             variant="outline"
             onClick={() => openSheet({ type: 'task', defaults: { title } })}
           >
-            More options
+            Time & reminder…
           </Button>
           <Button className="flex-1" onClick={submit} disabled={!title.trim()}>
-            Add {when === 'someday' ? 'to someday' : `for ${when}`}
+            Add
           </Button>
         </>
       }
@@ -88,37 +78,17 @@ export function QuickAddSheet() {
             {w[0].toUpperCase() + w.slice(1)}
           </Chip>
         ))}
-        <Chip
-          active={priority === 'high'}
-          onClick={() => setPriority(priority === 'high' ? 'normal' : 'high')}
-        >
-          ⚑ High priority
+        <Chip active={important} onClick={() => setImportant(!important)}>
+          ⭐ Important
         </Chip>
       </div>
-      {family && profiles.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {profiles.map((p) => (
-            <Chip
-              key={p.id}
-              active={(profileId ?? me?.id) === p.id}
-              onClick={() => setProfileId(p.id)}
-            >
-              <span>{p.avatar}</span> {p.name}
-            </Chip>
-          ))}
-        </div>
-      )}
     </Sheet>
   )
 }
 
 export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<Task> }) {
-  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
-  const profiles = useProfiles() ?? []
-  const goals =
-    useLiveQuery(() => db.goals.filter((g) => g.status === 'active').toArray(), []) ?? []
   const base = { ...defaults, ...task }
   const [title, setTitle] = useState(base.title ?? '')
   const [notes, setNotes] = useState(base.notes ?? '')
@@ -126,42 +96,52 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
     base.dueDate === undefined ? todayLocal() : (base.dueDate ?? ''),
   )
   const [dueTime, setDueTime] = useState(base.dueTime ?? '')
-  const [priority, setPriority] = useState<Priority>(base.priority ?? 'normal')
-  const [category, setCategory] = useState(base.category ?? 'Personal')
-  const [profileId, setProfileId] = useState<string>(base.profileId ?? me?.id ?? '')
-  const [goalId, setGoalId] = useState<string>(base.goalId ?? '')
+  const [important, setImportant] = useState(
+    base.priority === 'high' || base.priority === 'important',
+  )
   const [repeat, setRepeat] = useState<RepeatKey>(base.recurrenceRule?.type ?? 'none')
   const [days, setDays] = useState<number[]>(
     base.recurrenceRule?.type === 'selectedDays' ? base.recurrenceRule.days : [1, 3, 5],
   )
+  const [remind, setRemind] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (task)
+      void getLinkedReminder('task', task.id).then((r) => setRemind(r?.link?.before ?? null))
+  }, [task])
 
   const save = async () => {
     if (!title.trim()) return
     let rule: RecurrenceRule | null = null
     if (repeat === 'selectedDays') rule = { type: 'selectedDays', days }
     else if (repeat !== 'none') rule = { type: repeat }
-    await saveTask({
+    const saved = await saveTask({
       id: task?.id,
       title: title.trim(),
       notes: notes.trim() || undefined,
       dueDate: dueDate || (rule ? todayLocal() : null),
       dueTime: dueTime || null,
-      priority,
-      category,
-      profileId: profileId || null,
-      goalId: goalId || null,
+      priority: important ? 'high' : 'normal',
+      category: task?.category ?? 'Personal',
+      profileId: task?.profileId ?? me?.id ?? null,
+      goalId: task?.goalId ?? null,
       recurrenceRule: rule,
       status: task?.status ?? 'open',
       completedAt: task?.completedAt ?? null,
       archivedAt: task?.archivedAt ?? null,
     })
-    toast(task ? 'Task updated' : 'Task added', { emoji: '✅' })
+    // a time-based reminder needs a time; fall back to the morning of the day
+    await syncTaskReminder(
+      saved,
+      remind !== null && remind !== MORNING_OF && !saved.dueTime ? MORNING_OF : remind,
+    )
+    toast(task ? 'To-do updated' : 'To-do added', { emoji: '✅' })
     close()
   }
 
   return (
     <Sheet
-      title={task ? 'Edit task' : 'New task'}
+      title={task ? 'Edit to-do' : 'New to-do'}
       onClose={close}
       footer={
         <>
@@ -170,7 +150,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
               <ConfirmButton
                 onConfirm={async () => {
                   await deleteTask(task.id)
-                  toast('Task deleted')
+                  toast('To-do deleted')
                   close()
                 }}
                 confirmText="Delete?"
@@ -179,10 +159,10 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
               </ConfirmButton>
               <Button
                 variant="outline"
-                aria-label="Archive task"
+                aria-label="Archive to-do"
                 onClick={async () => {
                   await archiveTask(task.id)
-                  toast('Task archived', { emoji: '📦' })
+                  toast('To-do archived', { emoji: '📦' })
                   close()
                 }}
               >
@@ -196,18 +176,18 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
         </>
       }
     >
-      <Field label="Title">
+      <Field label="To-do">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={120}
-          placeholder="e.g. Plan the coming week"
+          placeholder="e.g. Call the bank"
         />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field
-          label={repeat === 'none' ? 'Due date' : 'Starts on'}
-          hint={repeat === 'none' ? 'Leave empty for Someday' : undefined}
+          label={repeat === 'none' ? 'Date' : 'Starts on'}
+          hint={repeat === 'none' ? 'Empty = someday' : undefined}
         >
           <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </Field>
@@ -215,6 +195,9 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
           <Input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} />
         </Field>
       </div>
+      <Field label="Remind me">
+        <RemindPicker id="task-remind" value={remind} onChange={setRemind} hasTime={!!dueTime} />
+      </Field>
       <Field label="Repeat">
         <Select value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatKey)}>
           <option value="none">Does not repeat</option>
@@ -226,48 +209,10 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
         </Select>
       </Field>
       {repeat === 'selectedDays' && <DayPicker value={days} onChange={setDays} />}
-      <Field label="Priority">
-        <div className="flex flex-wrap gap-2">
-          {PRIORITIES.map((p) => (
-            <Chip key={p.value} active={priority === p.value} onClick={() => setPriority(p.value)}>
-              {p.label}
-            </Chip>
-          ))}
-        </div>
-      </Field>
-      <div className={family ? 'grid grid-cols-2 gap-3' : 'grid'}>
-        <Field label="Category">
-          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
-            {CATEGORIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </Select>
-        </Field>
-        {family && (
-          <Field label="Assigned to">
-            <Select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-              <option value="">Everyone</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.avatar} {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-      </div>
-      {goals.length > 0 && (
-        <Field label="Linked goal">
-          <Select value={goalId} onChange={(e) => setGoalId(e.target.value)}>
-            <option value="">None</option>
-            {goals.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.emoji ?? '🎯'} {g.title}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      )}
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-sm">⭐ Important</span>
+        <Toggle checked={important} onChange={setImportant} label="Important" />
+      </label>
       <Field label="Notes (optional)">
         <TextArea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
       </Field>

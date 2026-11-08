@@ -73,8 +73,9 @@ export async function archiveTask(id: string) {
   await db.tasks.update(id, { status: 'archived', archivedAt: nowIso(), updatedAt: nowIso() })
 }
 export async function deleteTask(id: string) {
-  await db.transaction('rw', db.tasks, db.taskOccurrences, async () => {
+  await db.transaction('rw', db.tasks, db.taskOccurrences, db.reminders, async () => {
     await db.taskOccurrences.where('taskId').equals(id).delete()
+    await deleteLinked('task', id)
     await db.tasks.delete(id)
   })
 }
@@ -111,8 +112,9 @@ export async function setHabitStatus(id: string, status: Habit['status']) {
   })
 }
 export async function deleteHabit(id: string) {
-  await db.transaction('rw', db.habits, db.habitEntries, async () => {
+  await db.transaction('rw', db.habits, db.habitEntries, db.reminders, async () => {
     await db.habitEntries.where('habitId').equals(id).delete()
+    await deleteLinked('habit', id)
     await db.habits.delete(id)
   })
 }
@@ -124,7 +126,18 @@ export async function saveEvent(draft: Draft<CalendarEvent>) {
   await db.events.put(row)
   return row
 }
-export const deleteEvent = (id: string) => db.events.delete(id)
+export async function deleteEvent(id: string) {
+  await db.transaction('rw', db.events, db.reminders, async () => {
+    await deleteLinked('event', id)
+    await db.events.delete(id)
+  })
+}
+
+/** Remove reminders that belong to a deleted habit, to-do or event. */
+async function deleteLinked(type: 'habit' | 'task' | 'event', id: string) {
+  const rows = await db.reminders.filter((r) => r.link?.type === type && r.link.id === id).toArray()
+  await db.reminders.bulkDelete(rows.map((r) => r.id))
+}
 
 /* ---------- goals ---------- */
 export async function saveGoal(draft: Draft<Goal>) {

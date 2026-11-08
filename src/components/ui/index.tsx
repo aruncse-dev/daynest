@@ -378,21 +378,34 @@ export function CheckBox({
 }
 
 /* ---------- Forms ---------- */
+/**
+ * A labelled form row. Use `group` when the row holds several buttons (chips, icon pickers,
+ * time lists): a <label> must only wrap a single control.
+ */
 export function Field({
   label,
   hint,
   children,
+  group,
 }: {
   label: string
   hint?: string
   children: ReactNode
+  group?: boolean
 }) {
-  return (
-    <label className="grid gap-1.5">
+  const inner = (
+    <>
       <span className="text-xs font-semibold text-muted">{label}</span>
       {children}
       {hint && <span className="text-[11px] text-muted">{hint}</span>}
-    </label>
+    </>
+  )
+  return group ? (
+    <div role="group" aria-label={label} className="grid gap-1.5">
+      {inner}
+    </div>
+  ) : (
+    <label className="grid gap-1.5">{inner}</label>
   )
 }
 

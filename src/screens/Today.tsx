@@ -2,18 +2,21 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import { setSetting, toggleHabit } from '@/db/actions'
-import { addLocalDays, formatLocal, greetingFor, toLocalDate, type LocalDate } from '@/lib/date'
 import {
-  useFamilyMode,
-  usePrimaryProfile,
-  useProfiles,
-  useToday,
-  useNow,
-  useSetting,
-} from '@/lib/hooks'
+  addLocalDays,
+  compareLocal,
+  formatLocal,
+  greetingFor,
+  nowIso,
+  toLocalDate,
+  type LocalDate,
+} from '@/lib/date'
+import { usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
 import { useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
-import { kindnessFor, motivationFor } from '@/lib/wellness'
+import { motivationFor } from '@/lib/wellness'
 import { nextSlotAfter } from '@/lib/reminders'
+import { exportToDownload } from '@/lib/backup'
+import { isIOS, isStandalone, promptInstall, useCanPromptInstall } from '@/lib/install'
 import {
   DEFAULT_QUIET,
   isQuietTime,
@@ -24,22 +27,16 @@ import {
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { toast, useUI } from '@/store/ui'
-import { Avatar, Button, LinkButton, Panel, Ring, Skeleton } from '@/components/ui'
+import { Button, LinkButton, Panel, Ring, Skeleton } from '@/components/ui'
 import { EventRow, HabitRow, TaskRow } from '@/components/rows'
 
 export function Today() {
   const today = useToday()
   const now = useNow()
   const me = usePrimaryProfile()
-  const family = useFamilyMode()
   const openSheet = useUI((s) => s.openSheet)
-
-  const allTasks = useDayTasks(today, { includeOverdue: true })
-  const allHabits = useHabitsForDay(today)
-  // Self-first: your items plus unassigned ones; other people's items live on the Family tab
-  const mine = (pid?: string | null) => !pid || pid === me?.id
-  const tasks = allTasks?.filter((t) => mine(t.task.profileId))
-  const habits = allHabits?.filter((h) => mine(h.habit.profileId))
+  const tasks = useDayTasks(today, { includeOverdue: true })
+  const habits = useHabitsForDay(today)
   const doneCount =
     (tasks?.filter((t) => t.done).length ?? 0) + (habits?.filter((h) => h.done).length ?? 0)
   const total = (tasks?.length ?? 0) + (habits?.length ?? 0)
@@ -75,12 +72,9 @@ export function Today() {
           ☀️
         </span>
         <p className="pr-10 text-[15px] font-semibold leading-snug">“{motivationFor(today)}”</p>
-        {family && (
-          <p className="mt-1 pr-10 text-xs text-white/80">Smile idea: {kindnessFor(today)}</p>
-        )}
       </section>
 
-      <PhoneFreeCheckIn today={today} now={now} />
+      <HelperCard today={today} now={now} />
 
       <Panel>
         {!tasks || !habits ? (
@@ -120,7 +114,6 @@ export function Today() {
       </Panel>
 
       <ComingUp today={today} nudge={nextNudge} />
-      {family && <FamilyStrip />}
     </div>
   )
 }
@@ -164,7 +157,8 @@ function ComingUp({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold">{nudge.r.title}</span>
               <span className="block text-[11px] text-muted">
-                Nudge at {nudge.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                Reminder at{' '}
+                {nudge.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </span>
             </span>
           </button>
@@ -177,62 +171,74 @@ function ComingUp({
   )
 }
 
-function FamilyStrip() {
-  const profiles = useProfiles()
-  const navigate = useNavigate()
-  const others = profiles?.filter((p) => !p.isPrimary) ?? []
-  if (!others.length) return null
-  return (
-    <button
-      type="button"
-      onClick={() => navigate('/family')}
-      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-3 text-left"
-    >
-      <div className="flex -space-x-2">
-        {others.slice(0, 4).map((p) => (
-          <Avatar
-            key={p.id}
-            avatar={p.avatar}
-            color={p.color}
-            size={30}
-            className="ring-2 ring-surface"
-          />
-        ))}
-      </div>
-      <span className="flex-1 text-sm font-semibold">See the family's day</span>
-      <span className="text-muted">›</span>
-    </button>
-  )
+function Card({
+  tone = 'sage',
+  children,
+}: {
+  tone?: 'sage' | 'night' | 'amber'
+  children: React.ReactNode
+}) {
+  const cls =
+    tone === 'night'
+      ? 'bg-[#e9ecf6] text-[#26314f] dark:bg-[#1f2a44] dark:text-white'
+      : tone === 'amber'
+        ? 'bg-amber-soft text-ink'
+        : 'border border-sage-line bg-sage-soft'
+  return <div className={`rounded-[18px] px-4 py-3 text-sm animate-rise ${cls}`}>{children}</div>
 }
 
-/** Evening heads-up and a one-tap morning check-in for the phone-free habit. */
-function PhoneFreeCheckIn({ today, now }: { today: LocalDate; now: Date }) {
+/**
+ * At most one small helper card, picked for the moment:
+ * phone-free heads-up / morning check-in → evening wrap-up → backup reminder → install tip.
+ */
+function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
   const quiet = useSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
   const asked = useSetting<string | null>('phoneFreeAsked', null)
+  const wrapDismissed = useSetting<string | null>('wrapDismissed', null)
+  const backupSnoozeUntil = useSetting<string | null>('backupSnoozeUntil', null)
+  const installDismissed = useSetting('installDismissed', false)
+  const canInstall = useCanPromptInstall()
   const night = addLocalDays(today, -1)
-  const habit = useLiveQuery(
-    () =>
-      db.habits
-        .filter((h) => h.templateKey === 'phone-free-night' && h.status === 'active')
-        .first(),
-    [],
-  )
-  const doneLastNight = useLiveQuery(
-    async () =>
-      habit
-        ? !!(await db.habitEntries.where('[habitId+localDate]').equals([habit.id, night]).first())
-        : true,
-    [habit?.id, night],
-  )
+
+  const data = useLiveQuery(async () => {
+    const habit = await db.habits
+      .filter((h) => h.templateKey === 'phone-free-night' && h.status === 'active')
+      .first()
+    const doneLastNight = habit
+      ? !!(await db.habitEntries.where('[habitId+localDate]').equals([habit.id, night]).first())
+      : true
+    const open = await db.tasks
+      .filter(
+        (t) =>
+          !t.recurrenceRule &&
+          t.status === 'open' &&
+          !!t.dueDate &&
+          compareLocal(t.dueDate, today) <= 0,
+      )
+      .toArray()
+    const lastBackup = await db.backupHistory
+      .orderBy('createdAt')
+      .reverse()
+      .filter((b) => b.status === 'success')
+      .first()
+    const me = await db.profiles.filter((p) => !!p.isPrimary).first()
+    const items = (await db.tasks.count()) + (await db.habits.count())
+    return { habit, doneLastNight, open, lastBackup, since: me?.createdAt, items }
+  }, [today, night])
+  if (!data) return null
+
+  // 1. phone-free: evening heads-up, then morning check-in
   const mins = minutesUntilQuiet(quiet, now)
   if (mins !== null && mins > 0 && mins <= 60) {
     return (
-      <div className="flex items-center gap-3 rounded-[18px] bg-[#e9ecf6] px-4 py-3 text-sm text-[#26314f] dark:bg-[#1f2a44] dark:text-white">
-        <span className="text-2xl anim-sway">🌙</span>
-        <span>
-          Phone-free in {mins} min ({formatShort(quiet.start)}). Time to wrap up.
-        </span>
-      </div>
+      <Card tone="night">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl anim-sway">🌙</span>
+          <span>
+            Phone-free in {mins} min ({formatShort(quiet.start)}). Time to wrap up.
+          </span>
+        </div>
+      </Card>
     )
   }
   const morning =
@@ -240,32 +246,142 @@ function PhoneFreeCheckIn({ today, now }: { today: LocalDate; now: Date }) {
     !isQuietTime(quiet, now) &&
     now.getHours() < 14 &&
     nightOf(quiet, now) === toLocalDate(now)
-  if (!habit || !morning || doneLastNight !== false || asked === night) return null
-  return (
-    <div className="rounded-[18px] border border-sage-line bg-sage-soft px-4 py-3 animate-rise">
-      <div className="text-sm font-bold">☀️ Did you have a phone-free night?</div>
-      <div className="mt-2 flex gap-2">
-        <Button
-          size="sm"
-          onClick={async () => {
-            await toggleHabit(habit.id, night)
-            await setSetting('phoneFreeAsked', night)
-            toast('Amazing! Your streak grows 🌙✨', { emoji: '🎉' })
-          }}
-        >
-          Yes! 🎉
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={async () => {
-            await setSetting('phoneFreeAsked', night)
-            toast("That's okay — tonight is a fresh start 🌙")
-          }}
-        >
-          Not quite
-        </Button>
-      </div>
-    </div>
-  )
+  if (data.habit && morning && !data.doneLastNight && asked !== night) {
+    const habit = data.habit
+    return (
+      <Card>
+        <div className="font-bold">☀️ Did you have a phone-free night?</div>
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              await toggleHabit(habit.id, night)
+              await setSetting('phoneFreeAsked', night)
+              toast('Amazing! Your streak grows 🌙✨', { emoji: '🎉' })
+            }}
+          >
+            Yes! 🎉
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              await setSetting('phoneFreeAsked', night)
+              toast("That's okay — tonight is a fresh start 🌙")
+            }}
+          >
+            Not quite
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  // 2. evening wrap-up: carry unfinished to-dos over to tomorrow in one tap
+  if (now.getHours() >= 18 && data.open.length > 0 && wrapDismissed !== today) {
+    const n = data.open.length
+    return (
+      <Card>
+        <div className="font-bold">
+          🌇 Wrapping up? {n} to-do{n > 1 ? 's' : ''} still open.
+        </div>
+        <div className="text-xs text-muted">
+          That's fine. Move {n > 1 ? 'them' : 'it'} to tomorrow and rest easy.
+        </div>
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              const tomorrow = addLocalDays(today, 1)
+              await db.tasks.bulkUpdate(
+                data.open.map((t) => ({
+                  key: t.id,
+                  changes: { dueDate: tomorrow, updatedAt: nowIso() },
+                })),
+              )
+              await setSetting('wrapDismissed', today)
+              toast(`Moved to tomorrow`, { emoji: '🌙' })
+            }}
+          >
+            Move to tomorrow
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setSetting('wrapDismissed', today)}>
+            Keep
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  // 3. backup reminder: data only lives on this phone
+  const daysSince = (iso?: string) =>
+    iso ? Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000) : Infinity
+  const backupDue =
+    data.items >= 3 &&
+    daysSince(data.since) >= 3 &&
+    daysSince(data.lastBackup?.createdAt) >= 14 &&
+    (!backupSnoozeUntil || compareLocal(today, backupSnoozeUntil) >= 0)
+  if (backupDue) {
+    const d = daysSince(data.lastBackup?.createdAt)
+    return (
+      <Card tone="amber">
+        <div className="font-bold">
+          💾 {Number.isFinite(d) ? `Last backup was ${d} days ago` : 'Keep a backup'}
+        </div>
+        <div className="text-xs text-muted">
+          Your data lives only on this phone. A backup file keeps it safe.
+        </div>
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              await exportToDownload()
+              toast('Backup saved to your downloads', { emoji: '💾' })
+            }}
+          >
+            Save backup
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSetting('backupSnoozeUntil', addLocalDays(today, 7))}
+          >
+            Later
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  // 4. install tip: reminders work best from the home screen
+  if (!isStandalone() && !installDismissed) {
+    return (
+      <Card>
+        <div className="font-bold">📲 Add DayNest to your home screen</div>
+        <div className="text-xs text-muted">
+          {canInstall
+            ? 'Reminders work best from the installed app.'
+            : isIOS()
+              ? 'Tap Share ⬆️, then “Add to Home Screen”. Needed for reminders on iPhone.'
+              : 'Open your browser menu ⋮ and choose “Install app” or “Add to Home screen”.'}
+        </div>
+        <div className="mt-2 flex gap-2">
+          {canInstall && (
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (await promptInstall()) toast('Installed 🎉')
+              }}
+            >
+              Install
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => setSetting('installDismissed', true)}>
+            Not now
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+  return null
 }

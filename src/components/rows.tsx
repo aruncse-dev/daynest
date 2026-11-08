@@ -1,30 +1,42 @@
-import { Repeat } from 'lucide-react'
-import type { CalendarEvent, Habit, Profile } from '@/db/types'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { Bell, Repeat } from 'lucide-react'
+import { db } from '@/db/db'
+import type { CalendarEvent, Habit, ReminderLink } from '@/db/types'
 import { toggleHabit, toggleTask } from '@/db/actions'
 import { formatLocal, formatTime12, todayLocal, type LocalDate } from '@/lib/date'
 import type { DayTask } from '@/lib/queries'
 import { describeRule } from '@/lib/recurrence'
-import { useFamilyMode, useProfileMap } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import { chime } from '@/lib/sound'
-import { Avatar, CheckBox, Tag, cx } from './ui'
+import { CheckBox, Tag, cx } from './ui'
 
-const PRIORITY_TAG = {
-  high: { label: 'High', tone: 'rose' as const },
-  important: { label: 'Important', tone: 'amber' as const },
+/** The reminder time(s) attached to a habit, to-do or event, if any. */
+function useReminderTimes(type: ReminderLink['type'], id: string): string | null {
+  const r = useLiveQuery(
+    () =>
+      db.reminders.filter((x) => x.link?.type === type && x.link.id === id && x.enabled).first(),
+    [type, id],
+  )
+  return r?.times?.length ? r.times.map((t) => formatTime12(t)).join(', ') : null
+}
+
+function BellTag({ text }: { text: string | null }) {
+  if (!text) return null
+  return (
+    <span className="inline-flex items-center gap-0.5 text-sage-ink" title={`Reminder at ${text}`}>
+      <Bell size={11} /> {text}
+    </span>
+  )
 }
 
 export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean }) {
   const { task, done, overdue, date } = item
   const openSheet = useUI((s) => s.openSheet)
-  const profiles = useProfileMap()
-  const family = useFamilyMode()
-  const owner = family && task.profileId ? profiles.get(task.profileId) : undefined
-  const tag = PRIORITY_TAG[task.priority as keyof typeof PRIORITY_TAG]
+  const bell = useReminderTimes('task', task.id)
   const when = task.dueTime
     ? formatTime12(task.dueTime)
     : overdue && task.dueDate
-      ? `was due ${formatLocal(task.dueDate, 'd MMM')}`
+      ? `from ${formatLocal(task.dueDate, 'd MMM')}`
       : showDate && task.dueDate
         ? formatLocal(task.dueDate, 'EEE d MMM')
         : task.dueDate
@@ -37,12 +49,12 @@ export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean 
     <div className="flex items-center gap-3 border-b border-line-soft py-2.5 last:border-0 last:pb-0">
       <CheckBox
         checked={done}
-        label={done ? `Mark “${task.title}” incomplete` : `Mark “${task.title}” complete`}
+        label={done ? `Mark “${task.title}” not done` : `Mark “${task.title}” done`}
         onChange={async () => {
           await toggleTask(task, overdue ? todayLocal() : date)
           if (!done) {
             chime('tick')
-            toast(task.recurrenceRule ? 'Done for today' : 'Nice — task done', {
+            toast(task.recurrenceRule ? 'Done for today' : 'Nice — done!', {
               emoji: '🌿',
               action: {
                 label: 'Undo',
@@ -65,21 +77,23 @@ export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean 
         >
           {task.title}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
-          <span>{task.category}</span>·
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
           <span className={cx(overdue && 'text-amber-ink')}>{when}</span>
           {task.recurrenceRule && (
-            <span
-              className="inline-flex items-center gap-0.5"
-              title={describeRule(task.recurrenceRule)}
-            >
+            <span className="inline-flex items-center gap-0.5">
               · <Repeat size={11} /> {describeRule(task.recurrenceRule)}
             </span>
           )}
+          {bell && (
+            <>
+              · <BellTag text={bell} />
+            </>
+          )}
         </div>
       </button>
-      {tag && !done && <Tag tone={tag.tone}>{tag.label}</Tag>}
-      {owner && <Avatar avatar={owner.avatar} color={owner.color} size={24} />}
+      {!done && (task.priority === 'high' || task.priority === 'important') && (
+        <Tag tone="amber">⭐</Tag>
+      )}
     </div>
   )
 }
@@ -89,14 +103,13 @@ export function HabitRow({
   done,
   date = todayLocal(),
   streak,
-  owner,
 }: {
   habit: Habit
   done: boolean
   date?: LocalDate
   streak?: number
-  owner?: Profile
 }) {
+  const bell = useReminderTimes('habit', habit.id)
   return (
     <div className="flex items-center gap-3">
       <div
@@ -109,13 +122,13 @@ export function HabitRow({
       </div>
       <div className="min-w-0 flex-1">
         <b className="block truncate text-[13.5px]">{habit.title}</b>
-        <small className="flex items-center gap-1.5 text-[11px] text-muted">
+        <small className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
           {habit.targetLabel ?? 'Daily'}
           {streak ? <span className="text-amber-ink">· 🔥 {streak}</span> : null}
-          {owner && (
-            <span>
-              · {owner.avatar} {owner.name}
-            </span>
+          {bell && (
+            <>
+              · <BellTag text={bell} />
+            </>
           )}
         </small>
       </div>
@@ -145,6 +158,7 @@ const EVENT_EMOJI: Record<CalendarEvent['type'], string> = {
 
 export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDate }) {
   const openSheet = useUI((s) => s.openSheet)
+  const bell = useReminderTimes('event', event.id)
   return (
     <button
       type="button"
@@ -159,9 +173,14 @@ export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDat
         <div className="truncate text-[13px] font-semibold">
           {EVENT_EMOJI[event.type]} {event.title}
         </div>
-        <small className="block text-[11px] text-muted">
+        <small className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
           {formatLocal(date, 'EEEE')}
           {event.startTime ? ` · ${formatTime12(event.startTime)}` : ' · All day'}
+          {bell && (
+            <>
+              · <BellTag text={bell} />
+            </>
+          )}
         </small>
       </div>
     </button>

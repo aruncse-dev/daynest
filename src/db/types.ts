@@ -113,6 +113,17 @@ export interface Goal {
 }
 
 export type ReminderKind = 'interval' | 'times'
+
+/**
+ * A reminder can belong to a habit, to-do or event. It then only fires on days the item is
+ * actually due and not yet done, and tapping Done on the reminder completes the item.
+ */
+export interface ReminderLink {
+  type: 'habit' | 'task' | 'event'
+  id: string
+  /** to-dos and events: minutes before the item's time; -1 = morning of the day at 08:00 */
+  before?: number
+}
 export type ReminderPriority = 'normal' | 'high'
 /** Who a nudge is for — drives grouping and the playful animation style. */
 export type ReminderAudience = 'me' | 'family' | 'kids'
@@ -140,6 +151,7 @@ export interface Reminder {
   lastFiredSlot?: ISODate | null
   snoozedUntil?: ISODate | null
   presetKey?: string
+  link?: ReminderLink
   createdAt: ISODate
   updatedAt: ISODate
 }

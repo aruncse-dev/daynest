@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { db, SCHEMA_VERSION } from '@/db/db'
 import { clearAllData, setSetting } from '@/db/actions'
-import { SETTING_FAMILY, SETTING_ONBOARDED } from '@/db/keys'
+import { SETTING_ONBOARDED } from '@/db/keys'
 import { exportToDownload, importBackup, validateBackup, type ValidationResult } from '@/lib/backup'
 import {
   backupToFolder,
@@ -14,7 +14,7 @@ import {
   getFolderHandle,
   RETENTION_KEY,
 } from '@/lib/folderBackup'
-import { useFamilyMode, usePrimaryProfile, useSetting } from '@/lib/hooks'
+import { usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Avatar,
@@ -34,7 +34,6 @@ export function Settings() {
   const openSheet = useUI((s) => s.openSheet)
   const theme = useSetting<'light' | 'dark' | 'system'>('theme', 'system')
   const sound = useSetting('reminderSound', true)
-  const family = useFamilyMode()
   const navigate = useNavigate()
   const [tour, setTour] = useState(false)
 
@@ -55,25 +54,6 @@ export function Settings() {
             <ChevronRight size={18} className="text-muted" />
           </Row>
         )}
-        <Row>
-          <span className="flex-1">
-            I also plan for my family
-            <small className="block text-[11px] text-muted">
-              Adds a Family tab, kids & family nudges
-            </small>
-          </span>
-          <Toggle
-            checked={family}
-            onChange={(v) => setSetting(SETTING_FAMILY, v)}
-            label="Family mode"
-          />
-        </Row>
-        {family && (
-          <Row onClick={() => navigate('/family')}>
-            <span className="flex-1">Family members</span>
-            <ChevronRight size={18} className="text-muted" />
-          </Row>
-        )}
       </Group>
 
       <Group>
@@ -91,7 +71,7 @@ export function Settings() {
           />
         </div>
         <Row>
-          <span className="flex-1">Chime when a nudge appears</span>
+          <span className="flex-1">Chime when a reminder appears</span>
           <Toggle
             checked={sound}
             onChange={(v) => setSetting('reminderSound', v)}

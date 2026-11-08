@@ -13,7 +13,6 @@ import { Setup } from '@/screens/Setup'
 
 const Plan = lazy(() => import('@/screens/Plan').then((m) => ({ default: m.Plan })))
 const Routines = lazy(() => import('@/screens/Routines').then((m) => ({ default: m.Routines })))
-const Family = lazy(() => import('@/screens/Family').then((m) => ({ default: m.Family })))
 const Settings = lazy(() => import('@/screens/Settings').then((m) => ({ default: m.Settings })))
 
 function useTheme() {
@@ -81,12 +80,12 @@ export default function App() {
                 <Route index element={<Today />} />
                 <Route path="plan" element={<Plan />} />
                 <Route path="routines" element={<Routines />} />
-                <Route path="family" element={<Family />} />
+                <Route path="family" element={<Navigate to="/" replace />} />
                 <Route path="settings" element={<Settings />} />
                 {/* old links */}
                 <Route path="tasks" element={<Navigate to="/plan" replace />} />
                 <Route path="calendar" element={<Navigate to="/plan?tab=calendar" replace />} />
-                <Route path="goals" element={<Navigate to="/plan?tab=goals" replace />} />
+                <Route path="goals" element={<Navigate to="/plan" replace />} />
                 <Route path="habits" element={<Navigate to="/routines" replace />} />
                 <Route path="reminders" element={<Navigate to="/routines?tab=nudges" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

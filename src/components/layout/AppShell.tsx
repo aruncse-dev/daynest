@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { AnimatedBackground } from './AnimatedBackground'
 import { NAV } from './nav'
 import { Avatar, cx } from '@/components/ui'
-import { useFamilyMode, usePrimaryProfile } from '@/lib/hooks'
+import { usePrimaryProfile } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Toasts } from './Toasts'
 import { NudgeHost } from './NudgeHost'
@@ -14,7 +14,6 @@ import { PhoneFreeGuard } from './PhoneFreeGuard'
 /** Mobile-first single column. On larger screens the same phone layout is centred. */
 export function AppShell() {
   const me = usePrimaryProfile()
-  const family = useFamilyMode()
   const openSheet = useUI((s) => s.openSheet)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -48,7 +47,7 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[var(--nav)] backdrop-blur-xl"
       >
         <div className="mx-auto flex max-w-[480px] justify-around px-2 pb-safe pt-1.5">
-          {NAV.filter((n) => family || !('familyOnly' in n)).map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

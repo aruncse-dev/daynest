@@ -1,31 +1,27 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Trash2 } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { setSetting } from '@/db/actions'
-import { SETTING_FAMILY, SETTING_ONBOARDED } from '@/db/keys'
-import { applySuggestions, ensureProfiles, type MemberDraft } from '@/db/setup'
+import { SETTING_ONBOARDED } from '@/db/keys'
+import { applySuggestions, ensureProfile } from '@/db/setup'
 import { suggest, type SetupAnswers, type Suggestion } from '@/lib/suggest'
 import { FOCUS_AREAS, type FocusArea } from '@/lib/templates'
-import { useFamilyMode, usePrimaryProfile, useProfiles, useSetting } from '@/lib/hooks'
-import { Tour } from '@/components/Tour'
+import { usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { AnimatedBackground } from '@/components/layout/AnimatedBackground'
-import { Avatar, Button, Chip, Input, Toggle, cx } from '@/components/ui'
+import { Button, Input, Toggle, cx } from '@/components/ui'
+import { Tour } from '@/components/Tour'
 
-type Step = 'welcome' | 'you' | 'family' | 'focus' | 'rhythm' | 'pick' | 'done'
-const COLORS = ['#f0dfdf', '#e6e2f1', '#dfeaf0', '#f4ead2', '#e0efe9', '#f2e3ec']
+type Step = 'welcome' | 'you' | 'focus' | 'rhythm' | 'pick' | 'done'
 const ME_AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️']
+const VALID = new Set(FOCUS_AREAS.map((f) => f.key))
 
 export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const navigate = useNavigate()
   const me = usePrimaryProfile()
-  const existing = useProfiles() ?? []
   const saved = useSetting<SetupAnswers | null>('setupAnswers', null)
-  const familyMode = useFamilyMode()
-  const [forFamily, setForFamily] = useState(familyMode)
   const steps: Step[] = [
     ...(onboarding ? (['welcome'] as Step[]) : []),
     'you',
-    ...(forFamily ? (['family'] as Step[]) : []),
     'focus',
     'rhythm',
     'pick',
@@ -35,27 +31,18 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const [tour, setTour] = useState(false)
   const [name, setName] = useState(me?.name ?? '')
   const [avatar, setAvatar] = useState(me?.avatar ?? '')
-  const [members, setMembers] = useState<MemberDraft[]>([])
-  const [areas, setAreas] = useState<FocusArea[]>(saved?.areas ?? ['digital', 'home'])
+  const [areas, setAreas] = useState<FocusArea[]>(
+    (saved?.areas ?? ['organised', 'digital']).filter((a) => VALID.has(a)),
+  )
   const [wake, setWake] = useState(saved?.wake ?? '06:30')
   const [phoneFree, setPhoneFree] = useState(saved ? !!saved.phoneFreeAt : true)
   const [phoneFreeAt, setPhoneFreeAt] = useState(saved?.phoneFreeAt ?? '22:00')
-  const [worksWeekdays, setWorks] = useState(saved?.worksWeekdays ?? true)
   const [picked, setPicked] = useState<Set<string> | null>(null)
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState(0)
 
-  const hasKids =
-    members.some((m) => m.kind === 'child' && m.name.trim()) ||
-    existing.some((p) => p.role === 'Child')
-  const answers: SetupAnswers = {
-    areas,
-    hasKids,
-    wake,
-    phoneFreeAt: phoneFree ? phoneFreeAt : null,
-    worksWeekdays,
-  }
-  const suggestions = suggest(answers) // cheap, pure
+  const answers: SetupAnswers = { areas, wake, phoneFreeAt: phoneFree ? phoneFreeAt : null }
+  const suggestions = suggest(answers) // cheap and pure
   const chosen = picked ?? new Set(suggestions.filter((s) => s.recommended).map((s) => s.id))
   const idx = steps.indexOf(step)
   const go = (d: number) => setStep(steps[Math.max(0, Math.min(steps.length - 1, idx + d))])
@@ -63,14 +50,14 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const finish = async () => {
     setBusy(true)
     try {
-      await setSetting(SETTING_FAMILY, forFamily)
-      const ids = await ensureProfiles(name, avatar, forFamily ? members : [])
-      const n = await applySuggestions(
-        suggestions.filter((s) => chosen.has(s.id)),
-        answers,
-        ids,
+      const meId = await ensureProfile(name, avatar)
+      setCreated(
+        await applySuggestions(
+          suggestions.filter((s) => chosen.has(s.id)),
+          answers,
+          meId,
+        ),
       )
-      setCreated(n)
       setStep('done')
     } finally {
       setBusy(false)
@@ -80,8 +67,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
     await setSetting(SETTING_ONBOARDED, true)
     if (!onboarding) navigate('/')
   }
-
-  const canNext = step !== 'you' || name.trim().length > 0
+  const progressSteps = steps.filter((s) => s !== 'welcome' && s !== 'done')
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col overflow-hidden bg-[var(--bg)]">
@@ -90,19 +76,17 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
         {step !== 'welcome' && step !== 'done' && (
           <div
             className="mb-4 flex items-center gap-1.5"
-            aria-label={`Step ${idx} of ${steps.length - 2}`}
+            aria-label={`Step ${progressSteps.indexOf(step) + 1} of ${progressSteps.length}`}
           >
-            {steps
-              .filter((s) => s !== 'welcome' && s !== 'done')
-              .map((s) => (
-                <span
-                  key={s}
-                  className={cx(
-                    'h-1.5 flex-1 rounded-full transition-colors',
-                    steps.indexOf(s) <= idx ? 'bg-sage' : 'bg-line',
-                  )}
-                />
-              ))}
+            {progressSteps.map((s) => (
+              <span
+                key={s}
+                className={cx(
+                  'h-1.5 flex-1 rounded-full transition-colors',
+                  steps.indexOf(s) <= idx ? 'bg-sage' : 'bg-line',
+                )}
+              />
+            ))}
             {!onboarding && (
               <button
                 type="button"
@@ -119,7 +103,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
           {step === 'you' && (
             <StepShell
               emoji="👋"
-              title="Let's set up your nest"
+              title="Let's set up your day"
               sub="First, what should we call you?"
             >
               <Input
@@ -145,142 +129,16 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                   </button>
                 ))}
               </div>
-              <label className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3">
-                <span className="text-sm">
-                  <b>I also plan for my family</b>
-                  <span className="block text-xs text-muted">
-                    Optional. DayNest is mainly for your own day.
-                  </span>
-                </span>
-                <Toggle
-                  checked={forFamily}
-                  onChange={setForFamily}
-                  label="I also plan for my family"
-                />
-              </label>
-            </StepShell>
-          )}
-          {step === 'family' && (
-            <StepShell
-              emoji="🏡"
-              title="Who's in your family?"
-              sub="Add the people you plan with. Kids don't need phones or accounts — they're just profiles here. You can skip this."
-            >
-              {existing.filter((p) => !p.isPrimary).length > 0 && (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {existing
-                    .filter((p) => !p.isPrimary)
-                    .map((p) => (
-                      <span
-                        key={p.id}
-                        className="flex items-center gap-1.5 rounded-full bg-surface px-2 py-1 text-xs"
-                      >
-                        <Avatar avatar={p.avatar} color={p.color} size={22} /> {p.name}
-                      </span>
-                    ))}
-                </div>
-              )}
-              <div className="grid gap-3">
-                {members.map((m, i) => (
-                  <div key={i} className="rounded-2xl border border-line bg-surface p-3">
-                    <div className="flex gap-2">
-                      <Input
-                        value={m.name}
-                        onChange={(e) =>
-                          setMembers(
-                            members.map((x, j) =>
-                              j === i
-                                ? {
-                                    ...x,
-                                    name: e.target.value,
-                                    avatar:
-                                      x.kind === 'child'
-                                        ? x.avatar
-                                        : (e.target.value[0]?.toUpperCase() ?? 'A'),
-                                  }
-                                : x,
-                            ),
-                          )
-                        }
-                        placeholder="Name"
-                        maxLength={30}
-                        aria-label={`Member ${i + 1} name`}
-                      />
-                      <button
-                        type="button"
-                        aria-label="Remove"
-                        onClick={() => setMembers(members.filter((_, j) => j !== i))}
-                        className="grid size-11 shrink-0 place-items-center rounded-xl text-muted hover:bg-surface2"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      {(['partner', 'child', 'other'] as const).map((k) => (
-                        <Chip
-                          key={k}
-                          active={m.kind === k}
-                          onClick={() =>
-                            setMembers(
-                              members.map((x, j) =>
-                                j === i
-                                  ? {
-                                      ...x,
-                                      kind: k,
-                                      role:
-                                        k === 'child'
-                                          ? 'Child'
-                                          : k === 'partner'
-                                            ? 'Partner'
-                                            : 'Family',
-                                      avatar:
-                                        k === 'child'
-                                          ? i % 2
-                                            ? '👦'
-                                            : '👧'
-                                          : (x.name[0]?.toUpperCase() ?? 'A'),
-                                    }
-                                  : x,
-                              ),
-                            )
-                          }
-                        >
-                          {k === 'partner' ? '💑 Partner' : k === 'child' ? '🧒 Child' : '👵 Other'}
-                        </Chip>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  variant="soft"
-                  onClick={() =>
-                    setMembers([
-                      ...members,
-                      {
-                        name: '',
-                        avatar: members.length % 2 ? '👦' : '👧',
-                        color: COLORS[members.length % COLORS.length],
-                        role: 'Child',
-                        kind: 'child',
-                      },
-                    ])
-                  }
-                >
-                  + Add a family member
-                </Button>
-              </div>
             </StepShell>
           )}
           {step === 'focus' && (
             <StepShell
               emoji="🎯"
-              title="What would make life better?"
-              sub="Pick a few. We'll suggest simple habits and nudges for each."
+              title="What would help you most?"
+              sub="Pick one or more. We'll suggest a few simple habits and reminders."
             >
               <div className="grid grid-cols-2 gap-2">
-                {FOCUS_AREAS.filter(
-                  (f) => (!f.family || forFamily) && (f.key !== 'kids' || hasKids),
-                ).map((f) => {
+                {FOCUS_AREAS.map((f) => {
                   const on = areas.includes(f.key)
                   return (
                     <button
@@ -312,7 +170,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
             <StepShell
               emoji="⏰"
               title="Your daily rhythm"
-              sub="So nudges arrive at the right moments."
+              sub="So reminders arrive at the right moments."
             >
               <div className="grid gap-3">
                 <label className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3">
@@ -351,17 +209,6 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                     </label>
                   )}
                 </div>
-                <label className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3">
-                  <span className="text-sm font-semibold">💼 I work on weekdays</span>
-                  <Toggle
-                    checked={worksWeekdays}
-                    onChange={(v) => {
-                      setWorks(v)
-                      setPicked(null)
-                    }}
-                    label="Works weekdays"
-                  />
-                </label>
               </div>
             </StepShell>
           )}
@@ -376,9 +223,9 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                   <span className="ripple-ring text-sage/30" style={{ animationDelay: '-1.5s' }} />
                   <span className="text-6xl anim-hop">🎉</span>
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight">Your nest is ready!</h1>
+                <h1 className="text-3xl font-bold tracking-tight">You're all set!</h1>
                 <p className="mt-2 text-muted">
-                  {created} habits, nudges and to-dos were set up for you. Change anything, anytime.
+                  {created} habits, reminders and to-dos are ready. Change anything, anytime.
                 </p>
                 <Button className="mt-8 w-full" onClick={enterApp}>
                   Let's go 🌿
@@ -396,17 +243,21 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
             )}
             {step === 'pick' ? (
               <Button className="flex-1" disabled={busy} onClick={finish}>
-                Create {chosen.size} items ✨
+                {chosen.size ? `Create ${chosen.size} items ✨` : 'Skip — start empty'}
               </Button>
             ) : (
-              <Button className="flex-1" disabled={!canNext} onClick={() => go(1)}>
-                {step === 'family' && members.length === 0 ? 'Skip for now' : 'Next'}
+              <Button
+                className="flex-1"
+                disabled={step === 'you' && !name.trim()}
+                onClick={() => go(1)}
+              >
+                Next
               </Button>
             )}
           </div>
         )}
       </div>
-      {tour && <Tour onClose={() => setTour(false)} finishLabel="Set up my nest" />}
+      {tour && <Tour onClose={() => setTour(false)} finishLabel="Got it" />}
     </div>
   )
 }
@@ -445,11 +296,11 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
           Welcome to <span className="shimmer-text">DayNest</span>
         </h1>
         <p className="mt-2 text-muted">
-          Brighter days, one small step at a time: your to-dos, habits you choose, gentle nudges and
-          less screen time. 🌿
+          Brighter days, one small step at a time: your to-dos, habits you choose, gentle reminders
+          and less screen time. 🌿
         </p>
         <div className="mt-8 grid gap-2">
-          <Button onClick={onStart}>Set up my nest 🪄</Button>
+          <Button onClick={onStart}>Get started</Button>
           <Button variant="soft" onClick={onTour}>
             ▶️ Watch a 30-second tour
           </Button>
@@ -462,7 +313,12 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
   )
 }
 
-const KIND_LABEL = { habit: 'Habit to track', nudge: 'Nudge', task: 'Repeating to-do' }
+const KIND_LABEL = { habit: 'Habit', nudge: 'Reminder', task: 'Repeating to-do' }
+const AREA_NOTE: Partial<Record<FocusArea, string>> = {
+  health:
+    "Only pick what already suits you. DayNest doesn't give health advice; ask a doctor before starting something new.",
+  calm: 'Simple ideas, not instructions. Make them your own.',
+}
 
 function PickStep({
   suggestions,
@@ -483,25 +339,20 @@ function PickStep({
     ...f,
     items: suggestions.filter((s) => s.area === f.key),
   })).filter((g) => g.items.length)
-  const HEALTH_NOTE: Record<string, string> = {
-    health:
-      "Only pick what already suits you. DayNest doesn't give health advice; ask a doctor before starting something new.",
-    calm: 'Simple ideas, not instructions. Make them your own.',
-  }
   return (
     <StepShell
       emoji="✨"
       title="Here's what we suggest"
-      sub="Recommended items are ticked. Untick anything that doesn't fit — you can add more later."
+      sub="A few are ticked to start. Untick anything that doesn't fit — you can add more later."
     >
       <div className="grid gap-4">
         {groups.map((g) => (
           <section key={g.key}>
-            <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">
+            <h2 className="mb-1 text-xs font-bold uppercase tracking-wide text-muted">
               {g.emoji} {g.label}
             </h2>
-            {HEALTH_NOTE[g.key] && (
-              <p className="mb-1.5 text-[11px] text-muted">{HEALTH_NOTE[g.key]}</p>
+            {AREA_NOTE[g.key] && (
+              <p className="mb-1.5 text-[11px] text-muted">{AREA_NOTE[g.key]}</p>
             )}
             <div className="grid gap-1.5">
               {g.items.map((s) => {

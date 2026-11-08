@@ -2,7 +2,7 @@ import { useUI } from '@/store/ui'
 import { QuickAddSheet, TaskSheet } from './TaskSheets'
 import { HabitDetailSheet } from './HabitDetailSheet'
 import { AddNudgeSheet } from './AddNudgeSheet'
-import { EventSheet, GoalSheet, HabitSheet, ProfileSheet, ReminderSheet } from './OtherSheets'
+import { EventSheet, HabitSheet, ProfileSheet, ReminderSheet } from './OtherSheets'
 
 export function SheetHost() {
   const sheet = useUI((s) => s.sheet)
@@ -21,8 +21,6 @@ export function SheetHost() {
       return <HabitDetailSheet key={sheet.habitId} habitId={sheet.habitId} />
     case 'event':
       return <EventSheet key={sheet.event?.id ?? 'new'} event={sheet.event} date={sheet.date} />
-    case 'goal':
-      return <GoalSheet key={sheet.goal?.id ?? 'new'} goal={sheet.goal} />
     case 'profile':
       return <ProfileSheet key={sheet.profile?.id ?? 'new'} profile={sheet.profile} />
     case 'reminder':
