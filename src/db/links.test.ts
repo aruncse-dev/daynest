@@ -10,7 +10,13 @@ import {
   toggleHabit,
   toggleTask,
 } from './actions'
-import { linkedStillDue, MORNING_OF, syncHabitReminder, syncTaskReminder } from './links'
+import {
+  completeLinked,
+  linkedStillDue,
+  MORNING_OF,
+  syncHabitReminder,
+  syncTaskReminder,
+} from './links'
 import { dueReminder } from '@/lib/reminders'
 
 beforeEach(async () => {
@@ -131,5 +137,28 @@ describe('reminders linked to habits and to-dos', () => {
     await syncHabitReminder(hers, ['19:30'])
     const titles = (await db.reminders.toArray()).map((r) => r.title).sort()
     expect(titles).toEqual(['Mia: Brush teeth', 'Read'])
+  })
+
+  it('"Mark done" from a notification completes the habit or to-do once', async () => {
+    const h = await saveHabit({ title: 'Read', emoji: '📖', scheduleDays: [], status: 'active' })
+    await syncHabitReminder(h, ['20:00'])
+    const hr = (await db.reminders.toArray())[0]
+    expect(await completeLinked(hr, TODAY)).toBe(true)
+    expect(await db.habitEntries.count()).toBe(1)
+    expect(await completeLinked(hr, TODAY)).toBe(false) // pressing twice doesn't un-tick it
+    expect(await db.habitEntries.count()).toBe(1)
+
+    const t = await saveTask({
+      title: 'Pay rent',
+      priority: 'normal',
+      category: 'Personal',
+      status: 'open',
+      dueDate: TODAY,
+      dueTime: '09:00',
+    })
+    await syncTaskReminder(t, 0)
+    const tr = (await db.reminders.filter((r) => r.link?.type === 'task').toArray())[0]
+    expect(await completeLinked(tr, TODAY)).toBe(true)
+    expect((await db.tasks.get(t.id))!.status).toBe('done')
   })
 })

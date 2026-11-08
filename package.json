@@ -7,11 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p push/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "push:keys": "node scripts/push-keys.mjs"
   },
   "dependencies": {
     "date-fns": "^4.4.0",
@@ -38,6 +39,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "fake-indexeddb": "^6.2.8",
     "globals": "^17.14.0",
+    "http_ece": "^1.2.1",
     "jsdom": "^31.0.0",
     "prettier": "^3.9.10",
     "tailwindcss": "^4.3.5",

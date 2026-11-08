@@ -264,6 +264,7 @@ Daily snapshot policy:
 - **No sample data.** A 30-second auto-playing tour shows examples without saving anything.
 - **Local-storage app:** loads from the web; user data stays on the device. Today nudges toward backups and installing.
 - **Deploy only from `main`** (Vercel `ignoreCommand`).
-- **Proposed, not built:** always-on reminders via Web Push with a privacy-preserving "tick" server; family sharing via the user's own encrypted Google Sheet.
+- **Always-on reminders (optional):** `push/` is a free Cloudflare Worker (cron every minute + D1) sending standard Web Push. It stores only push endpoints and wake-up minutes; the service worker builds the notification from local data. Enabled when `VITE_PUSH_URL` + `VITE_PUSH_PUBLIC_KEY` are set.
+- **Proposed, not built:** family sharing via the user's own encrypted Google Sheet.
 
 **Deployment target:** Public GitHub repository + Vercel free tier (deploys from `main` only). Deploy static assets only; no secrets or personal data in the repository.

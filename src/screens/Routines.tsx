@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { BellRing, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { db } from '@/db/db'
 import { saveHabit, saveReminder, setHabitStatus, setSetting, toggleHabit } from '@/db/actions'
 import { REMINDER_PRESETS } from '@/db/reminderPresets'
@@ -8,17 +8,14 @@ import type { Reminder } from '@/db/types'
 import { addLocalDays, formatLocal } from '@/lib/date'
 import { currentStreak, isDueOn } from '@/lib/habits'
 import { describeSchedule } from '@/lib/reminders'
-import {
-  notificationSupport,
-  requestNotificationPermission,
-  showSystemNotification,
-} from '@/lib/notifications'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { usePrimaryProfile, useSetting, useToday } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Input, LinkButton, Panel, Skeleton, Tag, Toggle, cx } from '@/components/ui'
 import { HabitRow } from '@/components/rows'
+import { AlwaysOnCard } from '@/components/AlwaysOnCard'
+import { pushConfigured, PUSH_ENABLED_KEY } from '@/lib/push'
 
 export function Routines() {
   return (
@@ -309,6 +306,7 @@ function HabitsSection() {
 /* ---------------- Nudges ---------------- */
 
 function NudgesSection() {
+  const alwaysOn = useSetting(PUSH_ENABLED_KEY, false)
   const openSheet = useUI((s) => s.openSheet)
   // stand-alone nudges only: habit/to-do/event reminders live on those items
   const reminders = useLiveQuery(
@@ -327,7 +325,7 @@ function NudgesSection() {
         title="My reminders"
         action={<LinkButton onClick={() => openSheet({ type: 'addNudge' })}>+ Add</LinkButton>}
       />
-      <NotificationBanner />
+      <AlwaysOnCard />
       <Panel className="!py-1.5">
         {list.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted">
@@ -337,43 +335,13 @@ function NudgesSection() {
           list.map((r) => <NudgeRow key={r.id} reminder={r} />)
         )}
       </Panel>
-      <p className="mt-2 px-1 text-[11px] text-muted">
-        Reminders appear while DayNest is open or running in the background. Install it to your home
-        screen for best results.
-      </p>
-    </section>
-  )
-}
-
-function NotificationBanner() {
-  const [perm, setPerm] = useState(notificationSupport())
-  if (perm === 'granted' || perm === 'unsupported') return null
-  return (
-    <div className="mb-2 flex items-center gap-3 rounded-[14px] bg-sage-soft px-3 py-2.5 text-xs">
-      <BellRing size={18} className="shrink-0 text-sage-ink" />
-      <span className="flex-1">
-        {perm === 'denied'
-          ? 'Notifications are blocked — allow them for this site in browser settings.'
-          : 'Allow notifications so reminders reach you in the background.'}
-      </span>
-      {perm === 'default' && (
-        <button
-          type="button"
-          className="min-h-9 rounded-lg bg-sage px-3 font-bold text-white"
-          onClick={async () => {
-            const r = await requestNotificationPermission()
-            setPerm(r)
-            if (r === 'granted')
-              await showSystemNotification({
-                title: '🌿 Reminders are on',
-                body: 'Friendly reminders will appear here.',
-              })
-          }}
-        >
-          Allow
-        </button>
+      {!(pushConfigured() && alwaysOn) && (
+        <p className="mt-2 px-1 text-[11px] text-muted">
+          Reminders appear while DayNest is open or running in the background. Install it to your
+          home screen for best results.
+        </p>
       )}
-    </div>
+    </section>
   )
 }
 

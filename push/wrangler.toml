@@ -1,0 +1,17 @@
+# DayNest reminder pusher — Cloudflare Workers free plan (no card needed).
+name = "daynest-push"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Wake every minute to send due reminders.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "daynest-push"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[vars]
+ALLOWED_ORIGIN = "https://REPLACE-WITH-YOUR-APP.vercel.app"
+VAPID_PUBLIC_KEY = "REPLACE_WITH_PUBLIC_KEY_FROM_npm_run_push_keys"

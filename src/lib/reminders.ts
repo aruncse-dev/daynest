@@ -4,7 +4,8 @@ import { addLocalDays, timeToMinutes, toLocalDate, weekdayOf } from './date'
 /** Slots older than this when the app wakes up are skipped rather than spammed. */
 export const CATCH_UP_WINDOW_MS = 10 * 60 * 1000
 
-function slotsForDay(r: Reminder, dayStart: Date): Date[] {
+/** All scheduled slots for a reminder on the given (local) day. */
+export function slotsForDay(r: Reminder, dayStart: Date): Date[] {
   const local = toLocalDate(dayStart)
   if (r.days.length > 0 && !r.days.includes(weekdayOf(local))) return []
   const at = (mins: number) =>

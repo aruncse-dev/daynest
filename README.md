@@ -61,9 +61,11 @@ _Drink water, posture check, rest your eyes, take a pause, step outside_, plus t
 
 One switch sets everything up: a heads-up 15 minutes before, an important _“Phone down, heart up”_ reminder (default 10 PM), a **No phone after 10 PM** habit, quiet reminders until morning, and a calm screen if you open DayNest late. Pair it with Android _Bedtime mode_ or iPhone _Downtime_, which can actually limit the phone.
 
-### Do reminders fire when the app is closed?
+### Reminders when the app is closed (optional, free) 🔔
 
-**Not yet.** With no server, DayNest can only remind you while it's open or still running in the background; installing it to the home screen helps. Reliable closed-app alerts need **Web Push** from a small server. See _Always-on reminders_ in the plan; this is proposed, not built.
+Out of the box, reminders appear while DayNest is open or running in the background. For reminders that ring **even when the app is closed**, deploy the tiny free push server in [`push/`](push/README.md) (Cloudflare Workers free plan, no card, about 10 minutes). Then add `VITE_PUSH_URL` and `VITE_PUSH_PUBLIC_KEY` in Vercel and turn on **Routines → Reminders when DayNest is closed**.
+
+The server only stores your phone's push address and the minutes to wake it; never reminder text. Notifications have **Mark done ✓** and **Snooze 10 min** buttons.
 
 ## Your data
 

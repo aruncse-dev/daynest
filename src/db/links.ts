@@ -1,8 +1,9 @@
 import { db } from './db'
+import { toggleHabit, toggleTask } from './actions'
 import { uuid } from '@/lib/id'
 import { minutesToTime, nowIso, timeToMinutes, todayLocal, type LocalDate } from '@/lib/date'
 import { isDueOn } from '@/lib/habits'
-import { eventsBetween } from '@/lib/queries'
+import { eventsBetween } from '@/lib/events'
 import { taskAppearsOn } from '@/lib/recurrence'
 import type { CalendarEvent, Habit, Reminder, ReminderLink, Task } from './types'
 
@@ -126,4 +127,24 @@ export async function linkedStillDue(
   }
   const e = await db.events.get(id)
   return !!e && eventsBetween([e], today, today).length > 0
+}
+
+/**
+ * "Mark done" from a reminder (in-app card or phone notification): completes the linked
+ * habit or to-do for today, if it isn't already done. Returns true if something was completed.
+ */
+export async function completeLinked(
+  r: Reminder,
+  today: LocalDate = todayLocal(),
+): Promise<boolean> {
+  if (!r.link || r.link.type === 'event') return false
+  if (!(await linkedStillDue(r, today))) return false
+  if (r.link.type === 'habit') {
+    await toggleHabit(r.link.id, today)
+    return true
+  }
+  const task = await db.tasks.get(r.link.id)
+  if (!task) return false
+  await toggleTask(task, today)
+  return true
 }

@@ -24,3 +24,7 @@ daynest-backup-*.json
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Cloudflare worker local state
+push/.wrangler/
+push/.dev.vars

@@ -3,9 +3,8 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Reminder } from '@/db/types'
 import { db } from '@/db/db'
-import { nowIso, todayLocal } from '@/lib/date'
-import { toggleHabit, toggleTask } from '@/db/actions'
-import { linkedStillDue } from '@/db/links'
+import { nowIso } from '@/lib/date'
+import { completeLinked } from '@/db/links'
 import { smileLine } from '@/lib/wellness'
 import { toast, useUI } from '@/store/ui'
 import { cx } from '@/components/ui'
@@ -101,20 +100,7 @@ function useActions(r: Reminder) {
     /** Done on a habit/to-do reminder also completes that item for today. */
     done: async () => {
       dismiss(r.id)
-      if (!r.link) return
-      const today = todayLocal()
-      if (r.link.type === 'habit') {
-        const already = await db.habitEntries
-          .where('[habitId+localDate]')
-          .equals([r.link.id, today])
-          .first()
-        if (!already) await toggleHabit(r.link.id, today)
-        toast(`${r.title} — done for today!`, { emoji: '🌟' })
-      } else if (r.link.type === 'task') {
-        const task = await db.tasks.get(r.link.id)
-        if (task && (await linkedStillDue(r, today))) await toggleTask(task, today)
-        if (task) toast(`${r.title} — done!`, { emoji: '✅' })
-      }
+      if (await completeLinked(r)) toast(`${r.title} — done!`, { emoji: '🌟' })
     },
     snooze: async () => {
       await db.reminders.update(r.id, {

@@ -45,7 +45,13 @@ const KEY_FIELD: Record<DataTableName, string> = {
 }
 
 /** Settings that must never travel between devices (e.g. folder handles). */
-const LOCAL_ONLY_SETTINGS = new Set(['backupFolderHandle'])
+const LOCAL_ONLY_SETTINGS = new Set([
+  'backupFolderHandle',
+  'pushEnabled',
+  'pushDevice',
+  'pushHash',
+  'pushLastSync',
+])
 
 export async function buildBackup(): Promise<BackupFile> {
   const tables: BackupFile['tables'] = {}
