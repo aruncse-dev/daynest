@@ -19,6 +19,8 @@ export interface NotifyOptions {
   body: string
   tag?: string
   url?: string
+  /** keep on screen until the user acts (supported on Chromium desktop/Android) */
+  requireInteraction?: boolean
 }
 
 /**
@@ -34,6 +36,7 @@ export async function showSystemNotification(opts: NotifyOptions): Promise<boole
     icon: '/pwa-192.png',
     badge: '/pwa-192.png',
     data: { url: opts.url ?? '/' },
+    requireInteraction: opts.requireInteraction ?? false,
   }
   try {
     const reg = await navigator.serviceWorker?.getRegistration()

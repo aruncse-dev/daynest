@@ -7,6 +7,7 @@ export type SheetState =
   | { type: 'task'; task?: Task; defaults?: Partial<Task> }
   | { type: 'quickAdd' }
   | { type: 'habit'; habit?: Habit }
+  | { type: 'habitDetail'; habitId: string }
   | { type: 'event'; event?: CalendarEvent; date?: LocalDate }
   | { type: 'goal'; goal?: Goal }
   | { type: 'profile'; profile?: Profile }

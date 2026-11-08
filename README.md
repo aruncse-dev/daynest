@@ -1,67 +1,73 @@
 # DayNest 🌿
 
-**Plan your day. Build better habits. Keep your family organised — gently.**
+**Brighter days for you and your family.** Plan the day, keep a few good habits, get friendly nudges, and put the phone down at night.
 
-DayNest is a calm, mobile-first, offline-first Progressive Web App. No account, no server, no analytics: everything is stored in your browser (IndexedDB) on your device.
+DayNest is a mobile web app. The app loads from the web (Vercel); **everything you enter is saved only on your phone** in browser storage (IndexedDB). No account, no server database, no analytics.
 
-## Features
+## What's inside — 4 tabs, nothing more
 
-- **Home dashboard** — greeting, today's priorities, one-tap habits, week strip, upcoming events, family corner, next reminder, daily motivation.
-- **Tasks** — Today / Upcoming / Someday / Completed; priority, category, assignee, linked goal, notes; recurrence (daily, weekdays, selected days, weekly, monthly). Completing a recurring task only completes _that day's_ occurrence.
-- **Habits** — every day or selected weekdays, target labels, current & longest streaks, monthly heatmap (tap to fix a missed day), pause/archive without affecting history.
-- **Wellness** — guided breathing (calm, box, 4-7-8) with an animated breathing orb, meditation timer with soft bells, yoga flows (morning wake-up, desk reset, evening wind-down), no-equipment exercise (5-min energiser, family move break, 10-min strength). Keeps the screen awake during sessions and logs mindful minutes.
-- **Reminders** — presets for _drink water, sit straight, wear footwear, stand & stretch, rest your eyes, deep breaths, morning yoga, evening meditation, step outside, screens off_ plus fully custom reminders (every N minutes within a window, or at fixed times, on chosen weekdays). Snooze, chime, vibration and local system notifications.
-- **Calendar** — month, week and agenda views; events, appointments, school days, birthdays & yearly important dates.
-- **Family** — multiple local profiles with avatar & colour, per-person and combined views.
-- **Goals & plans** — this week / this month / long-term; link tasks; progress = completed one-off linked tasks ÷ one-off linked tasks (recurring tasks support a goal but aren't counted).
-- **Backup & restore** — versioned JSON export, validated import with dry-run summary and merge/replace (runs in one transaction — all or nothing), optional daily snapshots to a folder (File System Access API, Chromium) with retention.
-- **PWA** — installable, works offline after the first load, update prompt when a new version is deployed. Light & dark themes.
+| Tab          | What it does                                                                                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Today**    | Greeting, a daily positive thought + family smile idea, progress ring, next nudge. Tabs: **To-do · Habits · Family**. Morning check-in: _“Did you have a phone-free night?”_ |
+| **Plan**     | **To-dos** (today / next 2 weeks / someday / done, repeating to-dos) · **Calendar** (month + day agenda, birthdays) · **Goals** (week / month / long-term, with steps)       |
+| **Routines** | **Habits** (tap to check, tap › for streaks & monthly history, one-tap habit ideas) · **Nudges** (for me / family & kids / ideas) · **Phone-free** 🌙 (digital wellbeing)    |
+| **Family**   | Everyone's day — tap a person to expand. Shared to-dos anyone can help with.                                                                                                 |
 
-## About notifications & reminders
+Settings (theme, backup, privacy, setup wizard) is behind your avatar in the top corner.
 
-DayNest has no backend, so it can't send _push_ notifications. Reminders are scheduled on the device and fire while DayNest is open — in a tab, in the background, or as an installed app that the OS keeps alive. They appear as an in-app card (with chime/vibration) and, if permission is granted, as a system notification. If the browser is fully closed, reminders can't fire; a missed reminder is shown when you return within 10 minutes. On iPhone, notifications need DayNest installed to the Home Screen (iOS 16.4+).
+### Setup wizard 🪄
 
-True background reminders would require a push server (Web Push + VAPID) — intentionally out of scope for the local-only v1.
+First launch asks: your name → family members (partner / kids / others) → what would make life better (health, calm, family time, kids routines, digital wellbeing, home, learning, work) → your rhythm (wake time, phone-down time, weekdays). It then **suggests habits, nudges and repeating to-dos** (recommended ones pre-ticked) and creates the ones you keep. Re-run it anytime from Settings — it never duplicates.
+
+### Nudges that make you smile
+
+Presets include _drink water, sit straight, wear footwear, stretch, rest your eyes, deep breaths, yoga time, step outside, plan tomorrow, focus block_, kids' _brush teeth, school bag, homework, bedtime story_, and family _dinner together, hug o'clock, call the grandparents_. Or create your own (every N minutes in a window, or at set times, on chosen days).
+
+- **Important** nudges pop up in the middle of the screen with an animated card, confetti for kids/family, stay until you tap Done, chime louder, and still come through during phone-free time.
+- **Gentle** nudges drop in from the top with a playful animation and a cheerful line, then fade away.
+
+### Phone-free evenings 🌙 (digital wellbeing)
+
+One switch sets it up: a _“Phone-free soon”_ nudge 15 minutes before, an **important** _“Phone down, heart up”_ nudge at your chosen time (default 10 PM), a **No phone after 10 PM** habit, and muting of normal nudges until morning. If you open DayNest during that time it shows a calm “It's phone-free time” screen (with an honest _“Just 5 minutes — it's important”_ option). Each morning, Today asks whether you kept it, one tap to log it. The tab also links to Android _Bedtime mode_ / iPhone _Downtime_, which can actually limit the phone; a web app can't.
+
+### How nudges are delivered (honest version)
+
+There's no server, so nudges are scheduled on the phone. They appear while DayNest is open or running in the background (install it to the home screen for best results) as an in-app animated card plus, if allowed, a phone notification. If the app is fully closed they can't fire; one missed by less than 10 minutes shows when you return. On iPhone, add DayNest to the Home Screen to allow notifications (iOS 16.4+).
+
+## Your data
+
+- Saved only in this phone's browser storage. Clearing browser data erases it, so use **Settings → Backup** (JSON export/import with preview, merge or replace, all-or-nothing; optional daily folder snapshots on Chrome/Android).
+- Browser storage isn't encrypted; anyone using the phone's browser can open DayNest.
+- Family-sharing via your own Google Sheet (end-to-end encrypted) is a **proposed** next step, not built yet. See the concept in the plan.
 
 ## Development
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm run typecheck
-npm run lint
-npm test           # Vitest: dates/DST/leap years, recurrence, streaks, reminders, backup, UI smoke test
-npm run build && npm run preview   # test the PWA / offline mode
+npm run dev          # http://localhost:5173
+npm run typecheck && npm run lint && npm test
+npm run build && npm run preview
 ```
 
-Stack: React 19 · TypeScript · Vite · Tailwind CSS v4 · Dexie (IndexedDB) · Zustand (UI state only) · date-fns · Lucide · vite-plugin-pwa (Workbox, injectManifest) · Vitest + Testing Library.
-
-### Project layout
+React 19 · TypeScript · Vite · Tailwind CSS v4 · Dexie (IndexedDB) · Zustand (UI state only) · date-fns · Lucide · vite-plugin-pwa · Vitest + Testing Library.
 
 ```
 src/
-  db/           Dexie schema (versioned), types, CRUD actions, seed + reminder presets
-  lib/          date (local YYYY-MM-DD only), recurrence, habits/streaks, reminders, backup, wellness content
-  components/   ui primitives, layout (shell, nav, toasts, reminder runner), sheets (editors), wellness players
-  screens/      Home, Tasks, Habits, Wellness, Calendar, Family, Goals, Reminders, Settings, More, Onboarding
-  sw.ts         service worker: precache app shell, SPA fallback, notification click
-docs/mock-ui.html   original visual reference
+  db/          Dexie schema, types, actions, sample data, nudge presets, setup apply
+  lib/         dates (local YYYY-MM-DD), recurrence, streaks, nudge scheduling, phone-free hours,
+               setup suggestions, habit templates, backup, positive content
+  components/  ui primitives, tabs, shell & nav, nudge host, phone-free guard, editor sheets
+  screens/     Today, Plan, Routines, Family, Settings, Setup (wizard)
 ```
 
-## Deploy to Vercel (free tier)
+## Deploy (Vercel, main branch only)
 
-1. Push this repo to GitHub.
-2. In Vercel: **Add New → Project → Import** the repository.
-3. Framework preset **Vite** is detected automatically (`vercel.json` sets `npm run build` → `dist`). No environment variables are needed.
-4. Deploy. `vercel.json` adds SPA rewrites, no-cache headers for `sw.js` / the manifest (so updates roll out), and long-lived caching for hashed assets.
+`vercel.json` contains an `ignoreCommand` so **only commits to `main` are built and deployed**. Other branches are skipped.
 
-Then open the site on your phone and choose **Install app / Add to Home Screen**.
+One-time setup (needs your Vercel login):
 
-## Privacy
+1. vercel.com → **Add New → Project** → import `aruncse-dev/daynest`.
+2. Framework **Vite** is detected (`npm run build` → `dist`). No environment variables needed. Production branch: `main`.
+3. Deploy. From then on every push to `main` redeploys automatically.
 
-- No login, backend, analytics or trackers. Nothing is sent to a server.
-- Browser storage is **not encrypted** — anyone using the same device profile can open DayNest.
-- Browsers may clear site data; DayNest asks for persistent storage, but **export backups regularly**.
-- Never commit real exports or backups — `.gitignore` excludes `daynest-backup-*.json`, `exports/`, `backups/`.
-
-Sample data is clearly marked _(sample)_ and can be reset from **Settings → Sample data**.
+On your phone, open the site → browser menu → **Add to Home Screen / Install app**.

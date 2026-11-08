@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Download, FolderOpen, HardDrive, Pencil, ShieldCheck, Upload } from 'lucide-react'
+import {
+  ArrowLeft,
+  Download,
+  FolderOpen,
+  HardDrive,
+  Pencil,
+  ShieldCheck,
+  Upload,
+} from 'lucide-react'
+import { TabBar, useTab } from '@/components/Tabs'
 import { db, SCHEMA_VERSION } from '@/db/db'
 import { clearAllData, setSetting } from '@/db/actions'
 import { loadSampleData, SETTING_ONBOARDED, SETTING_SAMPLE } from '@/db/seed'
@@ -21,35 +30,55 @@ import {
   Button,
   ConfirmButton,
   IconButton,
-  PageHeader,
   Panel,
   PanelHead,
   Segmented,
   Select,
   Sheet,
   Tag,
+  Toggle,
 } from '@/components/ui'
+
+const TABS = ['general', 'backup', 'privacy'] as const
 
 export function Settings() {
   const me = usePrimaryProfile()
   const openSheet = useUI((s) => s.openSheet)
   const theme = useSetting<'light' | 'dark' | 'system'>('theme', 'system')
+  const sound = useSetting('reminderSound', true)
+  const notifyWhenOpen = useSetting('notifyWhenOpen', false)
   const sample = useSetting(SETTING_SAMPLE, false)
   const navigate = useNavigate()
+  const [tab, setTab] = useTab(TABS, 'general')
 
   return (
     <div>
-      <PageHeader eyebrow="Settings" title="Your DayNest" sub="Everything stays on this device." />
-      <div className="grid items-start gap-4 lg:grid-cols-2">
-        <div className="grid gap-4">
-          <Panel>
-            <PanelHead title="Profile" />
-            {me && (
+      <div className="mb-3 flex items-center gap-2">
+        <IconButton label="Back" onClick={() => navigate(-1)}>
+          <ArrowLeft size={18} />
+        </IconButton>
+        <h1 className="text-[26px] font-bold tracking-[-1px]">Settings</h1>
+      </div>
+      <TabBar
+        label="Settings"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'general', label: 'General' },
+          { value: 'backup', label: 'Backup' },
+          { value: 'privacy', label: 'Privacy' },
+        ]}
+      />
+
+      {tab === 'general' && (
+        <div className="grid gap-3">
+          {me && (
+            <Panel>
               <div className="flex items-center gap-3">
                 <Avatar avatar={me.avatar} color={me.color} size={46} />
                 <div className="flex-1">
                   <div className="font-bold">{me.name}</div>
-                  <div className="text-xs text-muted">Main profile on this device</div>
+                  <div className="text-xs text-muted">Main profile on this phone</div>
                 </div>
                 <IconButton
                   label="Edit profile"
@@ -58,14 +87,23 @@ export function Settings() {
                   <Pencil size={15} />
                 </IconButton>
               </div>
-            )}
-            <Button variant="soft" size="sm" className="mt-3" onClick={() => navigate('/family')}>
-              Manage family profiles
-            </Button>
-          </Panel>
-
+            </Panel>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate('/setup')}
+            className="flex items-center gap-3 rounded-[20px] bg-gradient-to-br from-[#5b8d6d] to-[#3f6e54] p-4 text-left text-white shadow-soft transition active:scale-[.98]"
+          >
+            <span className="text-3xl anim-wiggle [animation-iteration-count:2]">🪄</span>
+            <span className="flex-1">
+              <span className="block font-bold">Setup wizard</span>
+              <span className="block text-xs text-white/80">
+                Answer a few questions and get habits & nudges suggested for your family
+              </span>
+            </span>
+          </button>
           <Panel>
-            <PanelHead title="Appearance" />
+            <PanelHead title="Look & sound" />
             <Segmented
               label="Theme"
               value={theme}
@@ -76,15 +114,27 @@ export function Settings() {
                 { value: 'system', label: 'Auto' },
               ]}
             />
+            <div className="mt-3 grid gap-3 text-sm">
+              <label className="flex items-center justify-between gap-3">
+                <span>Chime when a nudge appears</span>
+                <Toggle
+                  checked={sound}
+                  onChange={(v) => setSetting('reminderSound', v)}
+                  label="Nudge chime"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3">
+                <span>Phone notification even while app is open</span>
+                <Toggle
+                  checked={notifyWhenOpen}
+                  onChange={(v) => setSetting('notifyWhenOpen', v)}
+                  label="Notify while open"
+                />
+              </label>
+            </div>
           </Panel>
-
-          <BackupPanel />
-        </div>
-
-        <div className="grid gap-4">
-          <StoragePanel />
           <Panel>
-            <PanelHead title="Sample data" sub="Fictional data to explore the app" />
+            <PanelHead title="Sample data" sub="Fictional family to explore the app" />
             {sample && (
               <p className="mb-3 rounded-xl bg-amber-soft px-3 py-2 text-xs text-amber-ink">
                 You are viewing sample data. Reset it before entering your own.
@@ -92,7 +142,7 @@ export function Settings() {
             )}
             <div className="flex flex-wrap gap-2">
               <ConfirmButton
-                confirmText="Replace all data with samples?"
+                confirmText="Replace all data?"
                 onConfirm={async () => {
                   await loadSampleData(me?.name?.replace(' (sample)', '') || 'Alex')
                   toast('Sample data loaded', { emoji: '🧺' })
@@ -111,30 +161,33 @@ export function Settings() {
                 {sample ? 'Reset sample data' : 'Erase all data'}
               </ConfirmButton>
             </div>
-            <p className="mt-2 text-[11px] text-muted">
-              Erasing returns you to the welcome screen. Export a backup first if you want to keep
-              anything.
-            </p>
           </Panel>
+        </div>
+      )}
 
+      {tab === 'backup' && <BackupPanel />}
+
+      {tab === 'privacy' && (
+        <div className="grid gap-3">
           <Panel>
             <PanelHead
-              title="Privacy"
+              title="Your data stays with you"
               action={<ShieldCheck size={18} className="text-sage-ink" />}
             />
             <ul className="grid gap-1.5 text-xs text-muted">
-              <li>• No account, no server, no analytics, no trackers.</li>
               <li>
-                • Your data lives in this browser's storage (IndexedDB) and is never sent anywhere.
+                • The app loads from the web, but everything you enter is saved{' '}
+                <b>only on this phone</b> (browser storage).
               </li>
+              <li>• No account, no server database, no analytics, no trackers.</li>
               <li>
-                • Browser storage is not encrypted. Anyone using this device profile can open
+                • Browser storage isn't encrypted — anyone using this phone's browser can open
                 DayNest.
               </li>
-              <li>• Profiles are not synced between devices — use export/import to move data.</li>
+              <li>• Nothing syncs between phones yet. Use Backup to move data.</li>
             </ul>
           </Panel>
-
+          <StoragePanel />
           <Panel>
             <PanelHead title="About" />
             <dl className="grid grid-cols-2 gap-y-1 text-xs">
@@ -144,11 +197,11 @@ export function Settings() {
               <dd className="text-right font-semibold">v{SCHEMA_VERSION}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted">
-              DayNest — plan your day, build better habits, keep your family organised. 🌿
+              DayNest — make every day a little brighter for you and your family. 🌿
             </p>
           </Panel>
         </div>
-      </div>
+      )}
     </div>
   )
 }

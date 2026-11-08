@@ -14,6 +14,8 @@ import {
   setHabitStatus,
 } from '@/db/actions'
 import type {
+  ReminderAudience,
+  ReminderPriority,
   CalendarEvent,
   EventType,
   Goal,
@@ -24,6 +26,7 @@ import type {
   Reminder,
 } from '@/db/types'
 import { todayLocal } from '@/lib/date'
+import { HABIT_TEMPLATES } from '@/lib/templates'
 import { usePrimaryProfile, useProfiles } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
@@ -94,6 +97,7 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
   const [days, setDays] = useState<number[]>(
     habit?.scheduleDays.length ? habit.scheduleDays : [1, 2, 3, 4, 5],
   )
+  const [templateKey, setTemplateKey] = useState(habit?.templateKey)
 
   const save = async () => {
     if (!title.trim()) return
@@ -103,6 +107,7 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
       emoji,
       targetLabel: targetLabel.trim() || undefined,
       description: habit?.description,
+      templateKey,
       profileId: profileId || null,
       scheduleDays: freq === 'daily' ? [] : days,
       status: habit?.status ?? 'active',
@@ -159,6 +164,30 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
         </>
       }
     >
+      {!habit && (
+        <Field label="Quick ideas">
+          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
+            {HABIT_TEMPLATES.filter((t) => !t.forKids).map((t) => (
+              <Chip
+                key={t.key}
+                active={title === t.title}
+                onClick={() => {
+                  setTitle(t.title)
+                  setEmoji(t.emoji)
+                  setTarget(t.targetLabel ?? '')
+                  setTemplateKey(t.key)
+                  if (t.days?.length) {
+                    setFreq('days')
+                    setDays(t.days)
+                  }
+                }}
+              >
+                {t.emoji} {t.title}
+              </Chip>
+            ))}
+          </div>
+        </Field>
+      )}
       <Field label="Habit">
         <Input
           value={title}
@@ -541,10 +570,16 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
   const [endTime, setEnd] = useState(reminder?.endTime ?? '20:00')
   const [times, setTimes] = useState<string[]>(reminder?.times?.length ? reminder.times : ['08:00'])
   const [days, setDays] = useState<number[]>(reminder?.days ?? [])
+  const [priority, setPriority] = useState<ReminderPriority>(reminder?.priority ?? 'normal')
+  const [audience, setAudience] = useState<ReminderAudience>(reminder?.audience ?? 'me')
+  const [profileId, setProfileId] = useState(reminder?.profileId ?? '')
 
   const save = async () => {
     if (!title.trim()) return
     await saveReminder({
+      priority,
+      audience,
+      profileId: profileId || null,
       id: reminder?.id,
       title: title.trim(),
       message: message.trim() || title.trim(),
@@ -560,13 +595,13 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
       lastFiredSlot: new Date().toISOString(),
       snoozedUntil: null,
     })
-    toast(reminder ? 'Reminder updated' : 'Reminder created', { emoji })
+    toast(reminder ? 'Nudge updated' : 'Nudge created', { emoji })
     close()
   }
 
   return (
     <Sheet
-      title={reminder ? 'Edit reminder' : 'New reminder'}
+      title={reminder ? 'Edit nudge' : 'New nudge'}
       onClose={close}
       footer={
         <>
@@ -574,7 +609,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
             <ConfirmButton
               onConfirm={async () => {
                 await deleteReminder(reminder.id)
-                toast('Reminder deleted')
+                toast('Nudge deleted')
                 close()
               }}
               confirmText="Delete?"
@@ -588,7 +623,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
         </>
       }
     >
-      <Field label="Reminder">
+      <Field label="Nudge">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -596,6 +631,36 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           placeholder="e.g. Drink water"
         />
       </Field>
+      <Field label="Who is it for?">
+        <Segmented
+          label="Who is it for"
+          value={audience}
+          onChange={setAudience}
+          options={[
+            { value: 'me', label: '🙂 Me' },
+            { value: 'family', label: '💛 Family' },
+            { value: 'kids', label: '🧒 Kids' },
+          ]}
+        />
+      </Field>
+      {audience !== 'me' && (
+        <Field label="Person (optional)">
+          <ProfileSelect value={profileId} onChange={setProfileId} />
+        </Field>
+      )}
+      <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3">
+        <span className="text-sm">
+          <b>Important</b>
+          <span className="block text-[11px] text-muted">
+            Stays on screen until you tap Done, louder chime, comes through in phone-free time
+          </span>
+        </span>
+        <Toggle
+          checked={priority === 'high'}
+          onChange={(v) => setPriority(v ? 'high' : 'normal')}
+          label="Important nudge"
+        />
+      </label>
       <Field label="Message">
         <Input
           value={message}

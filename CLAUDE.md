@@ -254,9 +254,17 @@ Daily snapshot policy:
 - [x] Phase 4: export/import and folder backup — validated JSON import (dry-run, merge/replace, atomic), daily folder snapshots with retention
 - [~] Phase 5: polish and deployment — dark mode, onboarding, sample-data reset, Vercel config done; full a11y audit pending
 
-### Additions beyond the original plan (requested)
+### Direction update (owner feedback, Nov 2026)
 
-- **Wellness**: guided breathing (calm / box / 4-7-8), meditation timer with bells, yoga flows (morning, desk, evening), no-equipment exercise routines, daily motivation lines, mindful-minutes stats.
-- **Reminders**: preset nudges (drink water, sit straight, wear footwear, stretch, eye rest, breathe, yoga, meditate, sunlight, screens off) + fully custom reminders (interval or fixed times, selected weekdays), snooze, local system notifications. No push server — reminders fire while the app is open/alive; this is explained in the UI.
+- **Mobile only.** Single-column phone layout everywhere; desktop just centres it.
+- **Simple navigation:** 4 tabs (Today · Plan · Routines · Family) + Settings behind the avatar. Long pages are split into tabs; per-item detail opens in sheets.
+- **Local-storage app, not an "offline" app.** The app loads from the web; user data stays on the device.
+- **No guided exercise content.** Yoga, exercise, meditation etc. are habits to _track_, not routines we coach.
+- **Positive energy:** daily thought, family smile idea, cheerful nudge lines, celebrations, never shaming.
+- **Nudges:** priority (important vs gentle), audience (me / family / kids), playful animated cards.
+- **Digital wellbeing:** phone-free evenings (default 10 PM): nudges, habit, mute, in-app guard, morning check-in.
+- **Setup wizard** suggests and creates habits, nudges and to-dos from a few answers; re-runnable.
+- **Deploy only from `main`** (Vercel `ignoreCommand`).
+- **Proposed, not built:** optional family sharing via the user's own Google Sheet with client-side encryption, pending owner decision.
 
-**Deployment target:** Public GitHub repository + Vercel free tier or GitHub Pages. Deploy static assets only; no secrets or personal data in the repository.
+**Deployment target:** Public GitHub repository + Vercel free tier (deploys from `main` only). Deploy static assets only; no secrets or personal data in the repository.

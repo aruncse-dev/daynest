@@ -17,7 +17,7 @@ export function UpdatePrompt() {
 
   useEffect(() => {
     if (offlineReady) {
-      toast('DayNest is ready to work offline', { emoji: '🌿' })
+      toast('DayNest is ready — your data stays on this device', { emoji: '🌿' })
       setOfflineReady(false)
     }
   }, [offlineReady, setOfflineReady])

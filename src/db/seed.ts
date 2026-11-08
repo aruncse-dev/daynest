@@ -3,6 +3,7 @@ import { uuid } from '@/lib/id'
 import { addLocalDays, nowIso, todayLocal, weekdayOf } from '@/lib/date'
 import { REMINDER_PRESETS } from './reminderPresets'
 import { clearAllData, setSetting } from './actions'
+import { DEFAULT_QUIET, QUIET_KEY } from '@/lib/quietHours'
 import type { Habit, HabitEntry, Profile, Reminder, Task } from './types'
 
 export const SETTING_ONBOARDED = 'onboarded'
@@ -10,33 +11,14 @@ export const SETTING_SAMPLE = 'sampleData'
 
 function reminderRows(enabledKeys: string[]): Reminder[] {
   const now = nowIso()
-  return REMINDER_PRESETS.map((p) => ({
+  return REMINDER_PRESETS.map(({ area: _area, ...p }) => ({
     ...p,
     id: uuid(),
-    enabled: enabledKeys.includes(p.presetKey ?? ''),
+    enabled: enabledKeys.includes(p.presetKey),
     lastFiredSlot: now, // don't fire a slot that was already due when the reminder was created
     createdAt: now,
     updatedAt: now,
   }))
-}
-
-/** Fresh start: one primary profile + reminder presets (off until the user enables them). */
-export async function startFresh(name: string) {
-  const now = nowIso()
-  await clearAllData()
-  await db.profiles.add({
-    id: uuid(),
-    name: name.trim() || 'Me',
-    avatar: (name.trim()[0] || 'M').toUpperCase(),
-    color: '#dce9dc',
-    role: 'Personal',
-    isPrimary: true,
-    createdAt: now,
-    updatedAt: now,
-  })
-  await db.reminders.bulkAdd(reminderRows([]))
-  await setSetting(SETTING_SAMPLE, false)
-  await setSetting(SETTING_ONBOARDED, true)
 }
 
 /**
@@ -65,8 +47,8 @@ export async function loadSampleData(primaryName = 'Alex') {
   })
   const me = p(primaryName, primaryName[0]?.toUpperCase() ?? 'A', '#e9dfd0', 'Personal', true)
   const partner = p('Sam (sample)', 'S', '#f0dfdf', 'Personal')
-  const kid1 = p('Mia (sample)', '👧', '#e6e2f1', 'Learning & play')
-  const kid2 = p('Leo (sample)', '👦', '#dfeaf0', 'Learning & play')
+  const kid1 = p('Mia (sample)', '👧', '#e6e2f1', 'Child')
+  const kid2 = p('Leo (sample)', '👦', '#dfeaf0', 'Child')
   await db.profiles.bulkAdd([me, partner, kid1, kid2])
 
   const task = (t: Partial<Task> & Pick<Task, 'title'>): Task => ({
@@ -165,7 +147,7 @@ export async function loadSampleData(primaryName = 'Alex') {
     habit({ title: 'Morning walk', emoji: '🚶', targetLabel: '20 minutes' }),
     habit({ title: 'Drink enough water', emoji: '💧', targetLabel: '6 glasses' }),
     habit({ title: 'Read with kids', emoji: '📚', targetLabel: '15 minutes' }),
-    habit({ title: '5 min meditation', emoji: '🧘', targetLabel: 'Before bed' }),
+    habit({ title: 'Yoga', emoji: '🧘‍♀️', targetLabel: '15 minutes', templateKey: 'yoga' }),
     habit({
       title: 'Screen-free family time',
       emoji: '📵',
@@ -180,6 +162,7 @@ export async function loadSampleData(primaryName = 'Alex') {
       scheduleDays: [1, 3, 5],
     }),
     habit({ title: 'Tidy toys', emoji: '🧸', profileId: kid2.id }),
+    habit({ title: 'No phone after 10 PM', emoji: '📵', templateKey: 'phone-free-night' }),
   ]
   await db.habits.bulkAdd(habits)
   // Fictional history with gentle gaps so streaks & heatmap have something to show
@@ -229,28 +212,19 @@ export async function loadSampleData(primaryName = 'Alex') {
     },
   ])
 
-  await db.wellnessSessions.bulkAdd([
-    {
-      id: uuid(),
-      kind: 'breathing',
-      routineId: 'calm',
-      title: 'Calm breath',
-      localDate: addLocalDays(today, -1),
-      durationSec: 100,
-      completedAt: now,
-    },
-    {
-      id: uuid(),
-      kind: 'yoga',
-      routineId: 'yoga-morning',
-      title: 'Morning wake-up flow',
-      localDate: addLocalDays(today, -2),
-      durationSec: 300,
-      completedAt: now,
-    },
-  ])
-
-  await db.reminders.bulkAdd(reminderRows(['water', 'posture', 'footwear']))
+  await db.reminders.bulkAdd(
+    reminderRows([
+      'water',
+      'posture',
+      'footwear',
+      'phonefree-soon',
+      'phonefree',
+      'kid-teeth',
+      'story',
+      'hug',
+    ]),
+  )
+  await setSetting(QUIET_KEY, { ...DEFAULT_QUIET, enabled: true })
   await setSetting(SETTING_SAMPLE, true)
   await setSetting(SETTING_ONBOARDED, true)
 }

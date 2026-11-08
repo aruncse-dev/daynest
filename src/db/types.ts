@@ -63,6 +63,8 @@ export interface Habit {
   /** Weekdays (0=Sun..6=Sat). Empty array = every day. */
   scheduleDays: number[]
   targetLabel?: string
+  /** Template the habit was created from (e.g. 'phone-free-night'), used for smart prompts. */
+  templateKey?: string
   status: HabitStatus
   createdAt: ISODate
   updatedAt: ISODate
@@ -111,6 +113,9 @@ export interface Goal {
 }
 
 export type ReminderKind = 'interval' | 'times'
+export type ReminderPriority = 'normal' | 'high'
+/** Who a nudge is for — drives grouping and the playful animation style. */
+export type ReminderAudience = 'me' | 'family' | 'kids'
 
 export interface Reminder {
   id: string
@@ -127,6 +132,9 @@ export interface Reminder {
   /** weekdays (0=Sun..6=Sat). Empty = every day */
   days: number[]
   enabled: boolean
+  /** high = stays on screen until acknowledged, stronger alert, fires during phone-free time */
+  priority?: ReminderPriority
+  audience?: ReminderAudience
   profileId?: string | null
   /** ISO of the scheduled slot most recently delivered */
   lastFiredSlot?: ISODate | null

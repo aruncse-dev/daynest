@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { db } from '@/db/db'
 import { dueReminder } from '@/lib/reminders'
 import { showSystemNotification } from '@/lib/notifications'
+import { DEFAULT_QUIET, isQuietTime, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { chime, vibrate } from '@/lib/sound'
 import { useUI } from '@/store/ui'
 import { getSetting } from '@/db/actions'
@@ -9,9 +10,11 @@ import { getSetting } from '@/db/actions'
 const TICK_MS = 20_000
 
 /**
- * Checks reminders while DayNest is open (foreground or background tab / installed app
- * kept alive by the OS). Without a push server, browsers cannot wake a closed app —
- * this is stated clearly in the Reminders screen.
+ * Checks nudges while DayNest is open (foreground, background tab, or an installed
+ * app kept alive by the OS). There is no push server, so a fully closed browser can't
+ * be woken — this is explained on the Nudges tab.
+ *
+ * During phone-free time, normal nudges are quietly skipped; high-priority ones still come through.
  */
 export function ReminderRunner() {
   useEffect(() => {
@@ -21,6 +24,8 @@ export function ReminderRunner() {
       running = true
       try {
         const now = new Date()
+        const quiet = await getSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
+        const muted = quiet.muteNudges && isQuietTime(quiet, now)
         const reminders = await db.reminders.filter((r) => r.enabled).toArray()
         for (const r of reminders) {
           const due = dueReminder(r, now)
@@ -29,9 +34,11 @@ export function ReminderRunner() {
             lastFiredSlot: due.snooze ? r.lastFiredSlot : due.slot.toISOString(),
             snoozedUntil: null,
           })
+          const high = r.priority === 'high'
+          if (muted && !high) continue
           useUI.getState().pushReminder(r)
-          if (await getSetting('reminderSound', true)) chime('soft')
-          vibrate([120, 60, 120])
+          if (await getSetting('reminderSound', true)) chime(high ? 'bell' : 'soft')
+          vibrate(high ? [200, 100, 200, 100, 300] : [120, 60, 120])
           if (
             document.visibilityState !== 'visible' ||
             (await getSetting('notifyWhenOpen', false))
@@ -41,11 +48,12 @@ export function ReminderRunner() {
               body: r.message,
               tag: `reminder-${r.id}`,
               url: '/',
+              requireInteraction: high,
             })
           }
         }
       } catch (e) {
-        console.warn('Reminder check failed', e)
+        console.warn('Nudge check failed', e)
       } finally {
         running = false
       }

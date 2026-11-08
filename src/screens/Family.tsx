@@ -1,51 +1,61 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Pencil, Plus } from 'lucide-react'
+import { ChevronDown, Pencil, Plus } from 'lucide-react'
 import { db } from '@/db/db'
 import type { Profile } from '@/db/types'
 import { isDueOn } from '@/lib/habits'
 import { useProfiles, useToday } from '@/lib/hooks'
 import { useDayTasks } from '@/lib/queries'
 import { useUI } from '@/store/ui'
-import {
-  Avatar,
-  Button,
-  EmptyState,
-  IconButton,
-  PageHeader,
-  Panel,
-  ProgressBar,
-} from '@/components/ui'
+import { Avatar, Button, EmptyState, LinkButton, Panel, Ring, cx } from '@/components/ui'
 import { HabitRow, TaskRow } from '@/components/rows'
+import { useTab } from '@/components/Tabs'
 
 export function Family() {
   const profiles = useProfiles()
   const openSheet = useUI((s) => s.openSheet)
+  const ids = (profiles ?? []).map((p) => p.id)
+  const [open, setOpen] = useTab([...ids, 'shared', 'none'], ids[0] ?? 'none', 'member')
   return (
     <div>
-      <PageHeader
-        eyebrow="Family"
-        title="Your little nest"
-        sub="Everyone's day at a glance — encouraging, never a scoreboard."
-        action={
-          <Button onClick={() => openSheet({ type: 'profile' })}>
-            <Plus size={16} /> Add member
-          </Button>
-        }
-      />
-      <div className="grid items-start gap-4 md:grid-cols-2 stagger">
-        {profiles?.map((p) => (
-          <MemberCard key={p.id} profile={p} />
-        ))}
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-[26px] font-bold tracking-[-1px]">Family</h1>
+        <Button size="sm" variant="soft" onClick={() => openSheet({ type: 'profile' })}>
+          <Plus size={15} /> Add member
+        </Button>
       </div>
-      <SharedToday />
-      <p className="mt-6 text-center text-[11px] text-muted">
-        Profiles are stored only on this device and are not synced or shared online.
+      <p className="mb-3 text-xs text-muted">
+        Everyone's day at a glance — little wins, never a scoreboard. Tap a person to see their day.
+      </p>
+      <div className="grid gap-2">
+        {profiles?.map((p) => (
+          <MemberCard
+            key={p.id}
+            profile={p}
+            open={open === p.id}
+            onToggle={() => setOpen(open === p.id ? 'none' : p.id)}
+          />
+        ))}
+        <SharedCard
+          open={open === 'shared'}
+          onToggle={() => setOpen(open === 'shared' ? 'none' : 'shared')}
+        />
+      </div>
+      <p className="mt-4 text-center text-[11px] text-muted">
+        Profiles are stored only on this phone and are not shared online.
       </p>
     </div>
   )
 }
 
-function MemberCard({ profile }: { profile: Profile }) {
+function MemberCard({
+  profile,
+  open,
+  onToggle,
+}: {
+  profile: Profile
+  open: boolean
+  onToggle: () => void
+}) {
   const today = useToday()
   const openSheet = useUI((s) => s.openSheet)
   const tasks = useDayTasks(today, { profileId: profile.id, includeOverdue: true })
@@ -61,66 +71,102 @@ function MemberCard({ profile }: { profile: Profile }) {
   const done =
     (tasks?.filter((t) => t.done).length ?? 0) + (habits?.filter((h) => h.done).length ?? 0)
   return (
-    <Panel>
-      <div className="mb-3 flex items-center gap-3">
-        <Avatar avatar={profile.avatar} color={profile.color} size={46} />
+    <Panel className="!p-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 p-3.5 text-left"
+      >
+        <Avatar avatar={profile.avatar} color={profile.color} size={44} />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-base font-bold">
+          <div className="truncate text-sm font-bold">
             {profile.name}
             {profile.isPrimary && (
-              <span className="ml-1.5 text-xs font-normal text-muted">(you)</span>
+              <span className="ml-1 text-xs font-normal text-muted">(you)</span>
             )}
-          </h2>
+          </div>
           <div className="text-xs text-muted">
-            {profile.role ?? 'Family'} · {total ? `${done} of ${total} things today` : 'A free day'}
+            {total
+              ? `${done} of ${total} today${done === total ? ' — superstar! ⭐' : ''}`
+              : 'Free day 🌼'}
           </div>
         </div>
-        <IconButton
-          label={`Edit ${profile.name}`}
-          onClick={() => openSheet({ type: 'profile', profile })}
-        >
-          <Pencil size={15} />
-        </IconButton>
-      </div>
-      {total > 0 && <ProgressBar value={done / total} className="mb-3" />}
-      {habits && habits.length > 0 && (
-        <div className="mb-2 grid gap-3">
-          {habits.map((h) => (
-            <HabitRow key={h.habit.id} habit={h.habit} done={h.done} />
+        {total > 0 && <Ring value={done / total} size={38} stroke={4} />}
+        <ChevronDown
+          size={18}
+          className={cx('text-muted transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-line-soft px-4 pb-4 pt-3 animate-fade">
+          {total === 0 && (
+            <p className="pb-2 text-xs text-muted">Nothing planned for {profile.name} today.</p>
+          )}
+          {habits && habits.length > 0 && (
+            <div className="mb-2 grid gap-3">
+              {habits.map((h) => (
+                <HabitRow key={h.habit.id} habit={h.habit} done={h.done} />
+              ))}
+            </div>
+          )}
+          {tasks?.map((t) => (
+            <TaskRow key={t.task.id} item={t} />
           ))}
+          <div className="mt-3 flex flex-wrap gap-1">
+            <LinkButton
+              onClick={() => openSheet({ type: 'task', defaults: { profileId: profile.id } })}
+            >
+              + To-do
+            </LinkButton>
+            <LinkButton onClick={() => openSheet({ type: 'habit' })}>+ Habit</LinkButton>
+            <LinkButton onClick={() => openSheet({ type: 'profile', profile })}>
+              <Pencil size={12} className="mr-1 inline" />
+              Edit profile
+            </LinkButton>
+          </div>
         </div>
       )}
-      {tasks?.map((t) => (
-        <TaskRow key={t.task.id} item={t} />
-      ))}
-      <div className="mt-3 flex gap-2">
-        <Button
-          size="sm"
-          variant="soft"
-          onClick={() => openSheet({ type: 'task', defaults: { profileId: profile.id } })}
-        >
-          + Task
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => openSheet({ type: 'habit' })}>
-          + Habit
-        </Button>
-      </div>
     </Panel>
   )
 }
 
-function SharedToday() {
+function SharedCard({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const today = useToday()
   const items = useDayTasks(today)
-  const shared = items?.filter((t) => !t.task.profileId)
+  const shared = items?.filter((t) => !t.task.profileId) ?? []
   return (
-    <Panel className="mt-4">
-      <h2 className="mb-1 text-base font-bold">Shared family tasks</h2>
-      <p className="mb-2 text-xs text-muted">Unassigned tasks anyone can pick up.</p>
-      {shared?.length ? (
-        shared.map((t) => <TaskRow key={t.task.id} item={t} />)
-      ) : (
-        <EmptyState emoji="🏡" title="Nothing shared today" />
+    <Panel className="!p-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 p-3.5 text-left"
+      >
+        <span className="grid size-11 place-items-center rounded-full bg-amber-soft text-xl">
+          🏡
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold">Shared family to-dos</div>
+          <div className="text-xs text-muted">
+            {shared.length
+              ? `${shared.filter((s) => s.done).length} of ${shared.length} done — anyone can help`
+              : 'Nothing shared today'}
+          </div>
+        </div>
+        <ChevronDown
+          size={18}
+          className={cx('text-muted transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-line-soft px-4 pb-4 pt-2">
+          {shared.length ? (
+            shared.map((t) => <TaskRow key={t.task.id} item={t} />)
+          ) : (
+            <EmptyState emoji="🏡" title="Nothing shared today" />
+          )}
+        </div>
       )}
     </Panel>
   )

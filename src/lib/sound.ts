@@ -38,6 +38,8 @@ export function chime(kind: 'bell' | 'soft' | 'tick' = 'bell') {
 
 export function vibrate(pattern: number | number[]) {
   try {
+    // browsers block vibration until the user has interacted with the page
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return
     navigator.vibrate?.(pattern)
   } catch {
     /* unsupported */
