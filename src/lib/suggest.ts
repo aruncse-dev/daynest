@@ -56,13 +56,13 @@ export function tunePreset(p: ReminderPreset, a: SetupAnswers): ReminderPreset {
   switch (p.presetKey) {
     case 'footwear':
       return t([shift(a.wake, 30), '17:30'])
-    case 'yoga':
-      return t([shift(a.wake, 15)])
+    case 'move':
+      return t([shift(a.wake, 30)])
     case 'kid-teeth':
       return t([shift(a.wake, 30), shift(night, -120)])
     case 'story':
       return t([shift(night, -90)])
-    case 'meditate':
+    case 'quiet':
       return t([shift(night, -60)])
     case 'plan-tomorrow':
       return t([shift(night, -75)])
@@ -77,30 +77,24 @@ export function tunePreset(p: ReminderPreset, a: SetupAnswers): ReminderPreset {
   }
 }
 
+/**
+ * Pre-ticked items. Only things that follow directly from the person's own answers
+ * (e.g. the phone-down time they chose) or simple planning routines. Health and calm
+ * items are never pre-ticked: we don't know enough about anyone to recommend them.
+ */
 const RECOMMENDED = new Set([
-  'walk',
-  'water',
-  'meditate',
-  'gratitude',
-  'family-dinner',
-  'hug',
-  'kid-read',
-  'kid-teeth',
   'phone-free-night',
-  'phones-dinner',
+  'phones-meals',
   'plan-tomorrow',
-  'read',
   'top3',
-  'p:water',
-  'p:posture',
-  'p:footwear',
+  'family-dinner',
+  'kid-teeth',
+  'kid-read',
   'p:phonefree',
   'p:phonefree-soon',
   'p:kid-teeth',
   'p:story',
   'p:family-dinner',
-  'p:hug',
-  'p:focus',
   't:plan-week',
 ])
 

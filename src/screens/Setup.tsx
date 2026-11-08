@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, Trash2 } from 'lucide-react'
 import { setSetting } from '@/db/actions'
-import { loadSampleData, SETTING_ONBOARDED, SETTING_SAMPLE } from '@/db/seed'
+import { SETTING_FAMILY, SETTING_ONBOARDED } from '@/db/keys'
 import { applySuggestions, ensureProfiles, type MemberDraft } from '@/db/setup'
 import { suggest, type SetupAnswers, type Suggestion } from '@/lib/suggest'
 import { FOCUS_AREAS, type FocusArea } from '@/lib/templates'
-import { usePrimaryProfile, useProfiles, useSetting } from '@/lib/hooks'
+import { useFamilyMode, usePrimaryProfile, useProfiles, useSetting } from '@/lib/hooks'
+import { Tour } from '@/components/Tour'
 import { AnimatedBackground } from '@/components/layout/AnimatedBackground'
 import { Avatar, Button, Chip, Input, Toggle, cx } from '@/components/ui'
 
@@ -19,14 +20,23 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const me = usePrimaryProfile()
   const existing = useProfiles() ?? []
   const saved = useSetting<SetupAnswers | null>('setupAnswers', null)
-  const steps: Step[] = onboarding
-    ? ['welcome', 'you', 'family', 'focus', 'rhythm', 'pick', 'done']
-    : ['you', 'family', 'focus', 'rhythm', 'pick', 'done']
+  const familyMode = useFamilyMode()
+  const [forFamily, setForFamily] = useState(familyMode)
+  const steps: Step[] = [
+    ...(onboarding ? (['welcome'] as Step[]) : []),
+    'you',
+    ...(forFamily ? (['family'] as Step[]) : []),
+    'focus',
+    'rhythm',
+    'pick',
+    'done',
+  ]
   const [step, setStep] = useState<Step>(steps[0])
-  const [name, setName] = useState(me?.name.replace(' (sample)', '') ?? '')
+  const [tour, setTour] = useState(false)
+  const [name, setName] = useState(me?.name ?? '')
   const [avatar, setAvatar] = useState(me?.avatar ?? '')
   const [members, setMembers] = useState<MemberDraft[]>([])
-  const [areas, setAreas] = useState<FocusArea[]>(saved?.areas ?? ['health', 'family', 'digital'])
+  const [areas, setAreas] = useState<FocusArea[]>(saved?.areas ?? ['digital', 'home'])
   const [wake, setWake] = useState(saved?.wake ?? '06:30')
   const [phoneFree, setPhoneFree] = useState(saved ? !!saved.phoneFreeAt : true)
   const [phoneFreeAt, setPhoneFreeAt] = useState(saved?.phoneFreeAt ?? '22:00')
@@ -53,7 +63,8 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const finish = async () => {
     setBusy(true)
     try {
-      const ids = await ensureProfiles(name, avatar, members)
+      await setSetting(SETTING_FAMILY, forFamily)
+      const ids = await ensureProfiles(name, avatar, forFamily ? members : [])
       const n = await applySuggestions(
         suggestions.filter((s) => chosen.has(s.id)),
         answers,
@@ -104,15 +115,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
           </div>
         )}
         <div key={step} className="flex-1 overflow-y-auto pb-4 animate-rise">
-          {step === 'welcome' && (
-            <Welcome
-              onStart={() => go(1)}
-              onSample={async () => {
-                await loadSampleData('Alex')
-                await setSetting(SETTING_SAMPLE, true)
-              }}
-            />
-          )}
+          {step === 'welcome' && <Welcome onStart={() => go(1)} onTour={() => setTour(true)} />}
           {step === 'you' && (
             <StepShell
               emoji="👋"
@@ -142,6 +145,19 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                   </button>
                 ))}
               </div>
+              <label className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3">
+                <span className="text-sm">
+                  <b>I also plan for my family</b>
+                  <span className="block text-xs text-muted">
+                    Optional. DayNest is mainly for your own day.
+                  </span>
+                </span>
+                <Toggle
+                  checked={forFamily}
+                  onChange={setForFamily}
+                  label="I also plan for my family"
+                />
+              </label>
             </StepShell>
           )}
           {step === 'family' && (
@@ -262,7 +278,9 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
               sub="Pick a few. We'll suggest simple habits and nudges for each."
             >
               <div className="grid grid-cols-2 gap-2">
-                {FOCUS_AREAS.filter((f) => f.key !== 'kids' || hasKids).map((f) => {
+                {FOCUS_AREAS.filter(
+                  (f) => (!f.family || forFamily) && (f.key !== 'kids' || hasKids),
+                ).map((f) => {
                   const on = areas.includes(f.key)
                   return (
                     <button
@@ -388,6 +406,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
           </div>
         )}
       </div>
+      {tour && <Tour onClose={() => setTour(false)} finishLabel="Set up my nest" />}
     </div>
   )
 }
@@ -413,7 +432,7 @@ function StepShell({
   )
 }
 
-function Welcome({ onStart, onSample }: { onStart: () => void; onSample: () => void }) {
+function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
   return (
     <div className="grid h-full place-items-center text-center">
       <div>
@@ -426,12 +445,13 @@ function Welcome({ onStart, onSample }: { onStart: () => void; onSample: () => v
           Welcome to <span className="shimmer-text">DayNest</span>
         </h1>
         <p className="mt-2 text-muted">
-          Brighter days for you and your family — habits, gentle nudges and less screen time. 🌿
+          Brighter days, one small step at a time: your to-dos, habits you choose, gentle nudges and
+          less screen time. 🌿
         </p>
         <div className="mt-8 grid gap-2">
           <Button onClick={onStart}>Set up my nest 🪄</Button>
-          <Button variant="soft" onClick={onSample}>
-            Just look around (sample family)
+          <Button variant="soft" onClick={onTour}>
+            ▶️ Watch a 30-second tour
           </Button>
         </div>
         <p className="mx-auto mt-5 max-w-xs text-[11px] text-muted">
@@ -463,6 +483,11 @@ function PickStep({
     ...f,
     items: suggestions.filter((s) => s.area === f.key),
   })).filter((g) => g.items.length)
+  const HEALTH_NOTE: Record<string, string> = {
+    health:
+      "Only pick what already suits you. DayNest doesn't give health advice; ask a doctor before starting something new.",
+    calm: 'Simple ideas, not instructions. Make them your own.',
+  }
   return (
     <StepShell
       emoji="✨"
@@ -475,6 +500,9 @@ function PickStep({
             <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">
               {g.emoji} {g.label}
             </h2>
+            {HEALTH_NOTE[g.key] && (
+              <p className="mb-1.5 text-[11px] text-muted">{HEALTH_NOTE[g.key]}</p>
+            )}
             <div className="grid gap-1.5">
               {g.items.map((s) => {
                 const on = chosen.has(s.id)

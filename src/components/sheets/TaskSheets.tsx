@@ -5,7 +5,7 @@ import { db } from '@/db/db'
 import { archiveTask, deleteTask, saveTask } from '@/db/actions'
 import type { Priority, RecurrenceRule, Task } from '@/db/types'
 import { addLocalDays, todayLocal } from '@/lib/date'
-import { usePrimaryProfile, useProfiles } from '@/lib/hooks'
+import { useFamilyMode, usePrimaryProfile, useProfiles } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import { CATEGORIES } from '@/lib/goals'
 import {
@@ -30,6 +30,7 @@ const PRIORITIES: { value: Priority; label: string }[] = [
 type RepeatKey = 'none' | RecurrenceRule['type']
 
 export function QuickAddSheet() {
+  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const openSheet = useUI((s) => s.openSheet)
   const me = usePrimaryProfile()
@@ -94,7 +95,7 @@ export function QuickAddSheet() {
           ⚑ High priority
         </Chip>
       </div>
-      {profiles.length > 1 && (
+      {family && profiles.length > 1 && (
         <div className="flex flex-wrap gap-2">
           {profiles.map((p) => (
             <Chip
@@ -112,6 +113,7 @@ export function QuickAddSheet() {
 }
 
 export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<Task> }) {
+  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
   const profiles = useProfiles() ?? []
@@ -233,7 +235,7 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
           ))}
         </div>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={family ? 'grid grid-cols-2 gap-3' : 'grid'}>
         <Field label="Category">
           <Select value={category} onChange={(e) => setCategory(e.target.value)}>
             {CATEGORIES.map((c) => (
@@ -241,16 +243,18 @@ export function TaskSheet({ task, defaults }: { task?: Task; defaults?: Partial<
             ))}
           </Select>
         </Field>
-        <Field label="Assigned to">
-          <Select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-            <option value="">Everyone</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.avatar} {p.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {family && (
+          <Field label="Assigned to">
+            <Select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+              <option value="">Everyone</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.avatar} {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </div>
       {goals.length > 0 && (
         <Field label="Linked goal">

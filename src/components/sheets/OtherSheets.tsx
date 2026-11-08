@@ -27,7 +27,7 @@ import type {
 } from '@/db/types'
 import { todayLocal } from '@/lib/date'
 import { HABIT_TEMPLATES } from '@/lib/templates'
-import { usePrimaryProfile, useProfiles } from '@/lib/hooks'
+import { useFamilyMode, usePrimaryProfile, useProfiles } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Button,
@@ -87,6 +87,7 @@ const EMOJIS = [
 ]
 
 export function HabitSheet({ habit }: { habit?: Habit }) {
+  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const me = usePrimaryProfile()
   const [title, setTitle] = useState(habit?.title ?? '')
@@ -167,7 +168,9 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
       {!habit && (
         <Field label="Quick ideas">
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 no-scrollbar">
-            {HABIT_TEMPLATES.filter((t) => !t.forKids).map((t) => (
+            {HABIT_TEMPLATES.filter(
+              (t) => !t.forKids && (family || (t.area !== 'family' && t.area !== 'kids')),
+            ).map((t) => (
               <Chip
                 key={t.key}
                 active={title === t.title}
@@ -227,9 +230,11 @@ export function HabitSheet({ habit }: { habit?: Habit }) {
         />
       </Field>
       {freq === 'days' && <DayPicker value={days} onChange={setDays} />}
-      <Field label="Whose habit?">
-        <ProfileSelect value={profileId} onChange={setProfileId} />
-      </Field>
+      {family && (
+        <Field label="Whose habit?">
+          <ProfileSelect value={profileId} onChange={setProfileId} />
+        </Field>
+      )}
     </Sheet>
   )
 }
@@ -560,6 +565,7 @@ const REMINDER_EMOJIS = [
 ]
 
 export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
+  const family = useFamilyMode()
   const close = useUI((s) => s.closeSheet)
   const [title, setTitle] = useState(reminder?.title ?? '')
   const [message, setMessage] = useState(reminder?.message ?? '')
@@ -631,19 +637,21 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           placeholder="e.g. Drink water"
         />
       </Field>
-      <Field label="Who is it for?">
-        <Segmented
-          label="Who is it for"
-          value={audience}
-          onChange={setAudience}
-          options={[
-            { value: 'me', label: '🙂 Me' },
-            { value: 'family', label: '💛 Family' },
-            { value: 'kids', label: '🧒 Kids' },
-          ]}
-        />
-      </Field>
-      {audience !== 'me' && (
+      {family && (
+        <Field label="Who is it for?">
+          <Segmented
+            label="Who is it for"
+            value={audience}
+            onChange={setAudience}
+            options={[
+              { value: 'me', label: '🙂 Me' },
+              { value: 'family', label: '💛 Family' },
+              { value: 'kids', label: '🧒 Kids' },
+            ]}
+          />
+        </Field>
+      )}
+      {family && audience !== 'me' && (
         <Field label="Person (optional)">
           <ProfileSelect value={profileId} onChange={setProfileId} />
         </Field>

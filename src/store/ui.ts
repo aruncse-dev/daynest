@@ -12,6 +12,7 @@ export type SheetState =
   | { type: 'goal'; goal?: Goal }
   | { type: 'profile'; profile?: Profile }
   | { type: 'reminder'; reminder?: Reminder }
+  | { type: 'addNudge' }
   | null
 
 export interface ToastItem {

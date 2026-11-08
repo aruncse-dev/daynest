@@ -1,44 +1,52 @@
 # DayNest 🌿
 
-**Brighter days for you and your family.** Plan the day, keep a few good habits, get friendly nudges, and put the phone down at night.
+**Brighter days, one small step at a time.** Plan your day, keep a few habits you choose, get friendly nudges, and put the phone down at night.
 
 DayNest is a mobile web app. The app loads from the web (Vercel); **everything you enter is saved only on your phone** in browser storage (IndexedDB). No account, no server database, no analytics.
 
-## What's inside — 4 tabs, nothing more
+## What's inside: 3 tabs
 
-| Tab          | What it does                                                                                                                                                                 |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Today**    | Greeting, a daily positive thought + family smile idea, progress ring, next nudge. Tabs: **To-do · Habits · Family**. Morning check-in: _“Did you have a phone-free night?”_ |
-| **Plan**     | **To-dos** (today / next 2 weeks / someday / done, repeating to-dos) · **Calendar** (month + day agenda, birthdays) · **Goals** (week / month / long-term, with steps)       |
-| **Routines** | **Habits** (tap to check, tap › for streaks & monthly history, one-tap habit ideas) · **Nudges** (for me / family & kids / ideas) · **Phone-free** 🌙 (digital wellbeing)    |
-| **Family**   | Everyone's day — tap a person to expand. Shared to-dos anyone can help with.                                                                                                 |
+DayNest is for **managing your own day**. Family features stay hidden unless you switch them on.
 
-Settings (theme, backup, privacy, setup wizard) is behind your avatar in the top corner.
+| Tab          | What it does                                                                                                                                                                                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Today**    | Greeting, a daily positive thought, and **one list** with today's to-dos and habits. Then what's coming up next (a nudge or an event). Morning check-in: _“Did you have a phone-free night?”_ |
+| **Plan**     | **Upcoming** (next 2 weeks + someday ideas) · **Calendar** · **Goals**                                                                                                                        |
+| **Routines** | One page: the **Phone-free evenings** switch, **My habits**, **My nudges**                                                                                                                    |
 
-### Setup wizard 🪄
+**Settings** (behind your avatar) is one short page: name, _I also plan for my family_, theme, chime, backup, tour, setup, privacy.
 
-First launch asks: your name → family members (partner / kids / others) → what would make life better (health, calm, family time, kids routines, digital wellbeing, home, learning, work) → your rhythm (wake time, phone-down time, weekdays). It then **suggests habits, nudges and repeating to-dos** (recommended ones pre-ticked) and creates the ones you keep. Re-run it anytime from Settings — it never duplicates.
+**Family mode (optional).** Switching on _I also plan for my family_ adds a **Family** tab, assigning to-dos and habits to people, and kids & family nudges.
+
+### First run: tour + setup wizard 🪄
+
+- **30-second tour**: auto-playing example screens (like a short video). Nothing is saved; there is no sample data.
+- **Setup wizard**: your name → (optional) family members → what you'd like help with → wake-up and phone-down times → suggestions you tick → done. Re-run anytime from Settings without getting duplicates.
+
+### No health advice
+
+DayNest doesn't coach exercise, yoga or breathing. Health items are **habits you track your own way**: no prescribed durations, never pre-ticked, with a note to ask a doctor before starting something new. Only things that follow from your own answers (like the phone-down time you chose) are pre-ticked.
 
 ### Nudges that make you smile
 
-Presets include _drink water, sit straight, wear footwear, stretch, rest your eyes, deep breaths, yoga time, step outside, plan tomorrow, focus block_, kids' _brush teeth, school bag, homework, bedtime story_, and family _dinner together, hug o'clock, call the grandparents_. Or create your own (every N minutes in a window, or at set times, on chosen days).
+Ideas include _drink water, sit straight, wear footwear, stand up for a bit, time to move, step outside, take a pause, quiet time, rest your eyes, plan tomorrow, focus block_. With family mode on there are also kids' and family nudges. Or create your own (every N minutes in a window, or at set times, on chosen days).
 
-- **Important** nudges pop up in the middle of the screen with an animated card, confetti for kids/family, stay until you tap Done, chime louder, and still come through during phone-free time.
+- **Important** nudges pop up in the middle of the screen with an animated card, stay until you tap Done, chime louder, and still come through during phone-free time.
 - **Gentle** nudges drop in from the top with a playful animation and a cheerful line, then fade away.
 
-### Phone-free evenings 🌙 (digital wellbeing)
+### Phone-free evenings 🌙
 
-One switch sets it up: a _“Phone-free soon”_ nudge 15 minutes before, an **important** _“Phone down, heart up”_ nudge at your chosen time (default 10 PM), a **No phone after 10 PM** habit, and muting of normal nudges until morning. If you open DayNest during that time it shows a calm “It's phone-free time” screen (with an honest _“Just 5 minutes — it's important”_ option). Each morning, Today asks whether you kept it, one tap to log it. The tab also links to Android _Bedtime mode_ / iPhone _Downtime_, which can actually limit the phone; a web app can't.
+One switch sets everything up: a _“Phone-free soon”_ nudge 15 minutes before, an **important** _“Phone down, heart up”_ nudge at your chosen time (default 10 PM), a **No phone after 10 PM** habit, and quiet nudges until morning. Opening DayNest during that time shows a calm reminder screen (with an honest _“just 5 minutes”_ option). Pair it with Android _Bedtime mode_ or iPhone _Downtime_, which can actually limit the phone; a web app can't.
 
-### How nudges are delivered (honest version)
+### Do notifications work when the app is closed?
 
-There's no server, so nudges are scheduled on the phone. They appear while DayNest is open or running in the background (install it to the home screen for best results) as an in-app animated card plus, if allowed, a phone notification. If the app is fully closed they can't fire; one missed by less than 10 minutes shows when you return. On iPhone, add DayNest to the Home Screen to allow notifications (iOS 16.4+).
+**No, not reliably.** There's no server, so DayNest can't wake itself up. Nudges appear while DayNest is open or still running in the background; installing it to the home screen helps. If the app is fully closed, nothing fires. A nudge missed by less than 10 minutes shows when you come back. Reliable closed-app alerts would need either a push server (which would have to know your reminder times) or your phone's own alarms/calendar.
 
 ## Your data
 
 - Saved only in this phone's browser storage. Clearing browser data erases it, so use **Settings → Backup** (JSON export/import with preview, merge or replace, all-or-nothing; optional daily folder snapshots on Chrome/Android).
 - Browser storage isn't encrypted; anyone using the phone's browser can open DayNest.
-- Family-sharing via your own Google Sheet (end-to-end encrypted) is a **proposed** next step, not built yet. See the concept in the plan.
+- Sharing via your own Google Sheet (end-to-end encrypted) is a **proposed** idea, not built.
 
 ## Development
 
@@ -53,11 +61,11 @@ React 19 · TypeScript · Vite · Tailwind CSS v4 · Dexie (IndexedDB) · Zustan
 
 ```
 src/
-  db/          Dexie schema, types, actions, sample data, nudge presets, setup apply
+  db/          Dexie schema, types, actions, nudge presets, setup apply
   lib/         dates (local YYYY-MM-DD), recurrence, streaks, nudge scheduling, phone-free hours,
                setup suggestions, habit templates, backup, positive content
-  components/  ui primitives, tabs, shell & nav, nudge host, phone-free guard, editor sheets
-  screens/     Today, Plan, Routines, Family, Settings, Setup (wizard)
+  components/  ui primitives, tabs, tour, shell & nav, nudge host, phone-free guard, editor sheets
+  screens/     Today, Plan, Routines, Family (optional), Settings, Setup (wizard)
 ```
 
 ## Deploy (Vercel, main branch only)

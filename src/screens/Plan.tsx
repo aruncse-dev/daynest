@@ -47,13 +47,13 @@ export function Plan() {
   const [tab, setTab] = useTab(TABS, 'tasks')
   return (
     <div>
-      <h1 className="mb-3 text-[26px] font-bold tracking-[-1px]">Plan</h1>
+      <h1 className="mb-3 text-[24px] font-bold tracking-[-0.8px]">Plan</h1>
       <TabBar
         label="Plan"
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'tasks', label: 'To-dos' },
+          { value: 'tasks', label: 'Upcoming' },
           { value: 'calendar', label: 'Calendar' },
           { value: 'goals', label: 'Goals' },
         ]}
@@ -67,52 +67,29 @@ export function Plan() {
 
 /* ---------------- To-dos ---------------- */
 
-type TaskView = 'today' | 'upcoming' | 'someday' | 'done'
-
+/** One scrollable list: the next two weeks, then someday ideas, with finished ones tucked away. */
 function TasksTab() {
-  const [view, setView] = useTab(['today', 'upcoming', 'someday', 'done'] as const, 'today', 'view')
   return (
-    <>
-      <ChipTabs<TaskView>
-        label="Which to-dos"
-        value={view}
-        onChange={setView}
-        options={[
-          { value: 'today', label: 'Today' },
-          { value: 'upcoming', label: 'Next 2 weeks' },
-          { value: 'someday', label: 'Someday' },
-          { value: 'done', label: 'Done' },
-        ]}
-      />
-      {view === 'today' && <TodayList />}
-      {view === 'upcoming' && <UpcomingList />}
-      {view === 'someday' && <SomedayList />}
-      {view === 'done' && <DoneList />}
-    </>
-  )
-}
-
-function TodayList() {
-  const today = useToday()
-  const items = useDayTasks(today, { includeOverdue: true })
-  if (!items)
-    return (
-      <Panel>
-        <Skeleton />
-      </Panel>
-    )
-  return (
-    <Panel>
-      {items.length === 0 ? (
-        <EmptyState
-          emoji="🌤️"
-          title="Nothing for today"
-          text="Enjoy the space, or tap + to add something small."
-        />
-      ) : (
-        items.map((i) => <TaskRow key={i.task.id} item={i} />)
-      )}
-    </Panel>
+    <div className="grid gap-3">
+      <div>
+        <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+          Next 2 weeks
+        </h2>
+        <UpcomingList />
+      </div>
+      <div>
+        <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+          Someday
+        </h2>
+        <SomedayList />
+      </div>
+      <details className="rounded-[18px] border border-line bg-surface px-3.5 py-2.5">
+        <summary className="cursor-pointer text-xs font-bold text-muted">Done recently</summary>
+        <div className="mt-2">
+          <DoneList />
+        </div>
+      </details>
+    </div>
   )
 }
 
@@ -152,7 +129,9 @@ function UpcomingList() {
   if (!groups.length)
     return (
       <Panel>
-        <EmptyState emoji="🗓️" title="Nothing in the next two weeks" />
+        <p className="py-2 text-center text-xs text-muted">
+          Nothing planned for the next two weeks.
+        </p>
       </Panel>
     )
   return (
@@ -186,11 +165,9 @@ function SomedayList() {
   return (
     <Panel>
       {items.length === 0 ? (
-        <EmptyState
-          emoji="💭"
-          title="No someday ideas yet"
-          text="A home for things without a deadline."
-        />
+        <p className="py-2 text-center text-xs text-muted">
+          Ideas without a deadline go here. Add one with + and leave the date empty.
+        </p>
       ) : (
         items.map((t) => (
           <TaskRow key={t.id} item={{ task: t, date: today, done: false, overdue: false }} />
@@ -227,12 +204,12 @@ function DoneList() {
   }, [])
   if (!data)
     return (
-      <Panel>
+      <div>
         <Skeleton />
-      </Panel>
+      </div>
     )
   return (
-    <Panel>
+    <div>
       {data.items.length === 0 ? (
         <EmptyState emoji="🌱" title="Finished to-dos will appear here" />
       ) : (
@@ -260,7 +237,7 @@ function DoneList() {
           ))}
         </details>
       )}
-    </Panel>
+    </div>
   )
 }
 

@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { AnimatedBackground } from './AnimatedBackground'
 import { NAV } from './nav'
 import { Avatar, cx } from '@/components/ui'
-import { usePrimaryProfile } from '@/lib/hooks'
+import { useFamilyMode, usePrimaryProfile } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Toasts } from './Toasts'
 import { NudgeHost } from './NudgeHost'
@@ -14,6 +14,7 @@ import { PhoneFreeGuard } from './PhoneFreeGuard'
 /** Mobile-first single column. On larger screens the same phone layout is centred. */
 export function AppShell() {
   const me = usePrimaryProfile()
+  const family = useFamilyMode()
   const openSheet = useUI((s) => s.openSheet)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -23,7 +24,7 @@ export function AppShell() {
     <>
       <AnimatedBackground leaves={5} />
       <div className="mx-auto min-h-dvh w-full max-w-[480px] px-4 pb-[96px] pt-[max(14px,env(safe-area-inset-top))]">
-        <header className="mb-4 flex items-center justify-between">
+        <header className="mb-3 flex items-center justify-between">
           <NavLink to="/" className="flex items-center gap-2 text-lg font-bold tracking-[-.5px]">
             <img src="/favicon.svg" alt="" className="size-9 rounded-xl shadow-sm" />
             daynest
@@ -47,7 +48,7 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[var(--nav)] backdrop-blur-xl"
       >
         <div className="mx-auto flex max-w-[480px] justify-around px-2 pb-safe pt-1.5">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {NAV.filter((n) => family || !('familyOnly' in n)).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

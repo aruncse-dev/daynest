@@ -473,3 +473,12 @@ button {
   animation: confetti-fall 2.2s ease-in forwards;
   pointer-events: none;
 }
+
+@keyframes tour-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}

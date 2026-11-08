@@ -24,10 +24,7 @@ export function Panel({
 }: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLElement>) {
   return (
     <section
-      className={cx(
-        'rounded-[20px] border border-line bg-surface p-4 shadow-soft sm:p-5',
-        className,
-      )}
+      className={cx('rounded-[18px] border border-line bg-surface p-3.5 shadow-soft', className)}
       {...rest}
     >
       {children}
@@ -45,7 +42,7 @@ export function PanelHead({
   action?: ReactNode
 }) {
   return (
-    <div className="mb-3.5 flex items-start justify-between gap-3">
+    <div className="mb-2.5 flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h2 className="text-base font-bold tracking-tight">{title}</h2>
         {sub && <div className="text-xs text-muted">{sub}</div>}

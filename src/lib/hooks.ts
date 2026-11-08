@@ -69,3 +69,8 @@ export function useSetting<T>(key: string, fallback: T): T {
   const row = useLiveQuery(() => db.settings.get(key), [key])
   return row ? (row.value as T) : fallback
 }
+
+/** Family features (profiles, assigning, kids/family nudges) only show when switched on. */
+export function useFamilyMode(): boolean {
+  return useSetting('familyMode', false)
+}

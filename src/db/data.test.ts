@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from './db'
 import { saveHabit, saveTask, toggleHabit, toggleTask } from './actions'
-import { loadSampleData } from './seed'
+import { saveEvent, saveGoal, saveProfile, saveReminder } from './actions'
 import { buildBackup, importBackup, validateBackup } from '@/lib/backup'
 
 beforeEach(async () => {
@@ -126,7 +126,43 @@ describe('backup validation', () => {
 
 describe('export / import', () => {
   it('round-trips all records into a fresh database', async () => {
-    await loadSampleData('Test')
+    const me = await saveProfile({ name: 'Test', avatar: 'T', color: '#eee', isPrimary: true })
+    const goal = await saveGoal({
+      title: 'Calm mornings',
+      horizon: 'month',
+      status: 'active',
+      profileId: me.id,
+    })
+    const t = await saveTask({
+      title: 'Lay out clothes',
+      priority: 'normal',
+      category: 'Home',
+      status: 'open',
+      dueDate: '2026-11-01',
+      recurrenceRule: { type: 'daily' },
+      goalId: goal.id,
+    })
+    await toggleTask(t, '2026-11-08')
+    const h = await saveHabit({
+      title: 'Read',
+      emoji: '📖',
+      scheduleDays: [],
+      status: 'active',
+      profileId: me.id,
+    })
+    await toggleHabit(h.id, '2026-11-08')
+    await saveEvent({ title: 'Dentist', localDate: '2026-11-12', type: 'appointment' })
+    await saveReminder({
+      title: 'Drink water',
+      message: 'Sip',
+      emoji: '💧',
+      kind: 'interval',
+      intervalMinutes: 60,
+      startTime: '08:00',
+      endTime: '20:00',
+      days: [],
+      enabled: true,
+    })
     const before = await buildBackup()
     const text = JSON.stringify(before)
     await db.delete()

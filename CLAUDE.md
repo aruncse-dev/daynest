@@ -256,15 +256,16 @@ Daily snapshot policy:
 
 ### Direction update (owner feedback, Nov 2026)
 
-- **Mobile only.** Single-column phone layout everywhere; desktop just centres it.
-- **Simple navigation:** 4 tabs (Today · Plan · Routines · Family) + Settings behind the avatar. Long pages are split into tabs; per-item detail opens in sheets.
+- **Self-management first.** Family features (Family tab, assigning, kids/family nudges) are hidden behind an optional _family mode_.
+- **Mobile only, minimal navigation:** 3 tabs (Today · Plan · Routines), plus Family in family mode. Settings is one short page behind the avatar. Prefer one page with sections over sub-tabs. Keep padding tight.
 - **Local-storage app, not an "offline" app.** The app loads from the web; user data stays on the device.
-- **No guided exercise content.** Yoga, exercise, meditation etc. are habits to _track_, not routines we coach.
-- **Positive energy:** daily thought, family smile idea, cheerful nudge lines, celebrations, never shaming.
-- **Nudges:** priority (important vs gentle), audience (me / family / kids), playful animated cards.
+- **No sample data.** A 30-second auto-playing tour shows examples without saving anything.
+- **No health advice.** No guided exercise, yoga or breathing content. Health items are neutral habits to track, never pre-ticked, with no prescribed durations.
+- **Positive energy:** daily thought, cheerful nudge lines, celebrations, never shaming.
+- **Nudges:** important vs gentle, playful animated cards. They only fire while the app is alive (no push server).
 - **Digital wellbeing:** phone-free evenings (default 10 PM): nudges, habit, mute, in-app guard, morning check-in.
 - **Setup wizard** suggests and creates habits, nudges and to-dos from a few answers; re-runnable.
 - **Deploy only from `main`** (Vercel `ignoreCommand`).
-- **Proposed, not built:** optional family sharing via the user's own Google Sheet with client-side encryption, pending owner decision.
+- **Proposed, not built:** optional sharing via the user's own Google Sheet with client-side encryption.
 
 **Deployment target:** Public GitHub repository + Vercel free tier (deploys from `main` only). Deploy static assets only; no secrets or personal data in the repository.

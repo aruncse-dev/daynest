@@ -4,7 +4,7 @@ import { toggleHabit, toggleTask } from '@/db/actions'
 import { formatLocal, formatTime12, todayLocal, type LocalDate } from '@/lib/date'
 import type { DayTask } from '@/lib/queries'
 import { describeRule } from '@/lib/recurrence'
-import { useProfileMap } from '@/lib/hooks'
+import { useFamilyMode, useProfileMap } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import { chime } from '@/lib/sound'
 import { Avatar, CheckBox, Tag, cx } from './ui'
@@ -18,7 +18,8 @@ export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean 
   const { task, done, overdue, date } = item
   const openSheet = useUI((s) => s.openSheet)
   const profiles = useProfileMap()
-  const owner = task.profileId ? profiles.get(task.profileId) : undefined
+  const family = useFamilyMode()
+  const owner = family && task.profileId ? profiles.get(task.profileId) : undefined
   const tag = PRIORITY_TAG[task.priority as keyof typeof PRIORITY_TAG]
   const when = task.dueTime
     ? formatTime12(task.dueTime)

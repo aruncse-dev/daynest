@@ -1,19 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import {
-  ArrowLeft,
-  Download,
-  FolderOpen,
-  HardDrive,
-  Pencil,
-  ShieldCheck,
-  Upload,
-} from 'lucide-react'
-import { TabBar, useTab } from '@/components/Tabs'
+import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { db, SCHEMA_VERSION } from '@/db/db'
 import { clearAllData, setSetting } from '@/db/actions'
-import { loadSampleData, SETTING_ONBOARDED, SETTING_SAMPLE } from '@/db/seed'
+import { SETTING_FAMILY, SETTING_ONBOARDED } from '@/db/keys'
 import { exportToDownload, importBackup, validateBackup, type ValidationResult } from '@/lib/backup'
 import {
   backupToFolder,
@@ -23,250 +14,208 @@ import {
   getFolderHandle,
   RETENTION_KEY,
 } from '@/lib/folderBackup'
-import { usePrimaryProfile, useSetting } from '@/lib/hooks'
+import { useFamilyMode, usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Avatar,
   Button,
   ConfirmButton,
   IconButton,
-  Panel,
-  PanelHead,
   Segmented,
   Select,
   Sheet,
-  Tag,
   Toggle,
 } from '@/components/ui'
+import { Tour } from '@/components/Tour'
 
-const TABS = ['general', 'backup', 'privacy'] as const
-
+/** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
 export function Settings() {
   const me = usePrimaryProfile()
   const openSheet = useUI((s) => s.openSheet)
   const theme = useSetting<'light' | 'dark' | 'system'>('theme', 'system')
   const sound = useSetting('reminderSound', true)
-  const notifyWhenOpen = useSetting('notifyWhenOpen', false)
-  const sample = useSetting(SETTING_SAMPLE, false)
+  const family = useFamilyMode()
   const navigate = useNavigate()
-  const [tab, setTab] = useTab(TABS, 'general')
+  const [tour, setTour] = useState(false)
 
   return (
-    <div>
-      <div className="mb-3 flex items-center gap-2">
+    <div className="grid gap-3">
+      <div className="flex items-center gap-2">
         <IconButton label="Back" onClick={() => navigate(-1)}>
           <ArrowLeft size={18} />
         </IconButton>
-        <h1 className="text-[26px] font-bold tracking-[-1px]">Settings</h1>
+        <h1 className="text-[24px] font-bold tracking-[-0.8px]">Settings</h1>
       </div>
-      <TabBar
-        label="Settings"
-        value={tab}
-        onChange={setTab}
-        tabs={[
-          { value: 'general', label: 'General' },
-          { value: 'backup', label: 'Backup' },
-          { value: 'privacy', label: 'Privacy' },
-        ]}
-      />
 
-      {tab === 'general' && (
-        <div className="grid gap-3">
-          {me && (
-            <Panel>
-              <div className="flex items-center gap-3">
-                <Avatar avatar={me.avatar} color={me.color} size={46} />
-                <div className="flex-1">
-                  <div className="font-bold">{me.name}</div>
-                  <div className="text-xs text-muted">Main profile on this phone</div>
-                </div>
-                <IconButton
-                  label="Edit profile"
-                  onClick={() => openSheet({ type: 'profile', profile: me })}
-                >
-                  <Pencil size={15} />
-                </IconButton>
-              </div>
-            </Panel>
-          )}
-          <button
-            type="button"
-            onClick={() => navigate('/setup')}
-            className="flex items-center gap-3 rounded-[20px] bg-gradient-to-br from-[#5b8d6d] to-[#3f6e54] p-4 text-left text-white shadow-soft transition active:scale-[.98]"
-          >
-            <span className="text-3xl anim-wiggle [animation-iteration-count:2]">🪄</span>
-            <span className="flex-1">
-              <span className="block font-bold">Setup wizard</span>
-              <span className="block text-xs text-white/80">
-                Answer a few questions and get habits & nudges suggested for your family
-              </span>
-            </span>
-          </button>
-          <Panel>
-            <PanelHead title="Look & sound" />
-            <Segmented
-              label="Theme"
-              value={theme}
-              onChange={(v) => setSetting('theme', v)}
-              options={[
-                { value: 'light', label: '☀️ Light' },
-                { value: 'dark', label: '🌙 Dark' },
-                { value: 'system', label: 'Auto' },
-              ]}
-            />
-            <div className="mt-3 grid gap-3 text-sm">
-              <label className="flex items-center justify-between gap-3">
-                <span>Chime when a nudge appears</span>
-                <Toggle
-                  checked={sound}
-                  onChange={(v) => setSetting('reminderSound', v)}
-                  label="Nudge chime"
-                />
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span>Phone notification even while app is open</span>
-                <Toggle
-                  checked={notifyWhenOpen}
-                  onChange={(v) => setSetting('notifyWhenOpen', v)}
-                  label="Notify while open"
-                />
-              </label>
-            </div>
-          </Panel>
-          <Panel>
-            <PanelHead title="Sample data" sub="Fictional family to explore the app" />
-            {sample && (
-              <p className="mb-3 rounded-xl bg-amber-soft px-3 py-2 text-xs text-amber-ink">
-                You are viewing sample data. Reset it before entering your own.
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <ConfirmButton
-                confirmText="Replace all data?"
-                onConfirm={async () => {
-                  await loadSampleData(me?.name?.replace(' (sample)', '') || 'Alex')
-                  toast('Sample data loaded', { emoji: '🧺' })
-                }}
-              >
-                Load sample data
-              </ConfirmButton>
-              <ConfirmButton
-                confirmText="Erase everything?"
-                onConfirm={async () => {
-                  await clearAllData()
-                  await setSetting(SETTING_ONBOARDED, false)
-                  toast('All data cleared')
-                }}
-              >
-                {sample ? 'Reset sample data' : 'Erase all data'}
-              </ConfirmButton>
-            </div>
-          </Panel>
+      <Group>
+        {me && (
+          <Row onClick={() => openSheet({ type: 'profile', profile: me })}>
+            <Avatar avatar={me.avatar} color={me.color} size={36} />
+            <span className="flex-1 font-semibold">{me.name}</span>
+            <ChevronRight size={18} className="text-muted" />
+          </Row>
+        )}
+        <Row>
+          <span className="flex-1">
+            I also plan for my family
+            <small className="block text-[11px] text-muted">
+              Adds a Family tab, kids & family nudges
+            </small>
+          </span>
+          <Toggle
+            checked={family}
+            onChange={(v) => setSetting(SETTING_FAMILY, v)}
+            label="Family mode"
+          />
+        </Row>
+        {family && (
+          <Row onClick={() => navigate('/family')}>
+            <span className="flex-1">Family members</span>
+            <ChevronRight size={18} className="text-muted" />
+          </Row>
+        )}
+      </Group>
+
+      <Group>
+        <div className="px-3.5 py-3">
+          <div className="mb-2 text-sm">Theme</div>
+          <Segmented
+            label="Theme"
+            value={theme}
+            onChange={(v) => setSetting('theme', v)}
+            options={[
+              { value: 'light', label: '☀️ Light' },
+              { value: 'dark', label: '🌙 Dark' },
+              { value: 'system', label: 'Auto' },
+            ]}
+          />
         </div>
-      )}
+        <Row>
+          <span className="flex-1">Chime when a nudge appears</span>
+          <Toggle
+            checked={sound}
+            onChange={(v) => setSetting('reminderSound', v)}
+            label="Nudge chime"
+          />
+        </Row>
+      </Group>
 
-      {tab === 'backup' && <BackupPanel />}
+      <BackupGroup />
 
-      {tab === 'privacy' && (
-        <div className="grid gap-3">
-          <Panel>
-            <PanelHead
-              title="Your data stays with you"
-              action={<ShieldCheck size={18} className="text-sage-ink" />}
-            />
-            <ul className="grid gap-1.5 text-xs text-muted">
-              <li>
-                • The app loads from the web, but everything you enter is saved{' '}
-                <b>only on this phone</b> (browser storage).
-              </li>
-              <li>• No account, no server database, no analytics, no trackers.</li>
-              <li>
-                • Browser storage isn't encrypted — anyone using this phone's browser can open
-                DayNest.
-              </li>
-              <li>• Nothing syncs between phones yet. Use Backup to move data.</li>
-            </ul>
-          </Panel>
-          <StoragePanel />
-          <Panel>
-            <PanelHead title="About" />
-            <dl className="grid grid-cols-2 gap-y-1 text-xs">
-              <dt className="text-muted">App version</dt>
-              <dd className="text-right font-semibold">{__APP_VERSION__}</dd>
-              <dt className="text-muted">Database schema</dt>
-              <dd className="text-right font-semibold">v{SCHEMA_VERSION}</dd>
-            </dl>
-            <p className="mt-3 text-xs text-muted">
-              DayNest — make every day a little brighter for you and your family. 🌿
-            </p>
-          </Panel>
-        </div>
-      )}
+      <Group>
+        <Row onClick={() => setTour(true)}>
+          <span className="flex-1">▶️ Watch the 30-second tour</span>
+          <ChevronRight size={18} className="text-muted" />
+        </Row>
+        <Row onClick={() => navigate('/setup')}>
+          <span className="flex-1">🪄 Get suggestions again (setup)</span>
+          <ChevronRight size={18} className="text-muted" />
+        </Row>
+      </Group>
+
+      <details className="rounded-[18px] border border-line bg-surface px-3.5 py-3 text-sm">
+        <summary className="cursor-pointer">🔒 Privacy & storage</summary>
+        <ul className="mt-2 grid gap-1.5 text-xs text-muted">
+          <li>• The app loads from the web, but what you enter is saved only on this phone.</li>
+          <li>• No account, no server database, no ads, no tracking.</li>
+          <li>
+            • Browser storage isn't encrypted. Anyone using this phone's browser can open DayNest.
+          </li>
+          <li>• Clearing browser data erases DayNest, so keep a backup.</li>
+        </ul>
+        <StorageLine />
+      </details>
+
+      <div className="flex items-center justify-between gap-3 px-1">
+        <span className="text-[11px] text-muted">
+          DayNest {__APP_VERSION__} · data v{SCHEMA_VERSION}
+        </span>
+        <ConfirmButton
+          className="!min-h-9 !px-3 !text-xs"
+          confirmText="Erase everything?"
+          onConfirm={async () => {
+            await clearAllData()
+            await setSetting(SETTING_ONBOARDED, false)
+            toast('All data erased')
+          }}
+        >
+          Erase all data
+        </ConfirmButton>
+      </div>
+
+      {tour && <Tour onClose={() => setTour(false)} />}
     </div>
   )
 }
 
-function StoragePanel() {
-  const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>({})
-  const refresh = async () => {
-    try {
-      const est = await navigator.storage?.estimate?.()
-      const persisted = await navigator.storage?.persisted?.()
-      setInfo({ usage: est?.usage, quota: est?.quota, persisted })
-    } catch {
-      /* unsupported */
-    }
-  }
-  useEffect(() => {
-    void refresh()
-  }, [])
-  const mb = (n?: number) =>
-    n === undefined ? '—' : n > 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${(n / 1e6).toFixed(1)} MB`
+function Group({ children }: { children: ReactNode }) {
   return (
-    <Panel>
-      <PanelHead title="Storage" action={<HardDrive size={18} className="text-muted" />} />
-      <div className="text-xs text-muted">
-        Using {mb(info.usage)} of {mb(info.quota)} available.{' '}
-        {info.persisted ? (
-          <Tag tone="sage">Protected storage</Tag>
-        ) : (
-          <Tag tone="amber">Best-effort storage</Tag>
-        )}
-      </div>
+    <section className="overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
+      {children}
+    </section>
+  )
+}
+
+function Row({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+  const cls = 'flex min-h-12 w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm'
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${cls} hover:bg-surface2`}>
+      {children}
+    </button>
+  ) : (
+    <div className={cls}>{children}</div>
+  )
+}
+
+function StorageLine() {
+  const [info, setInfo] = useState<{ usage?: number; persisted?: boolean }>({})
+  useEffect(() => {
+    void (async () => {
+      try {
+        const est = await navigator.storage?.estimate?.()
+        const persisted = await navigator.storage?.persisted?.()
+        setInfo({ usage: est?.usage, persisted })
+      } catch {
+        /* unsupported */
+      }
+    })()
+  }, [])
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>Using {info.usage === undefined ? '—' : `${(info.usage / 1e6).toFixed(1)} MB`}</span>
       {!info.persisted && navigator.storage?.persist && (
         <Button
           size="sm"
           variant="soft"
-          className="mt-3"
           onClick={async () => {
             const ok = await navigator.storage.persist()
+            setInfo((i) => ({ ...i, persisted: ok }))
             toast(
               ok
-                ? 'Storage protected from automatic clean-up'
-                : 'Browser declined — installing the app usually helps',
+                ? 'Your browser will keep DayNest data'
+                : 'Browser declined. Installing the app usually helps',
             )
-            void refresh()
           }}
         >
           Ask browser to keep my data
         </Button>
       )}
-      <p className="mt-3 text-[11px] text-muted">
-        Browsers can clear site data (e.g. when storage is low or you clear history). Regular
-        backups are essential.
-      </p>
-    </Panel>
+    </div>
   )
 }
 
-function BackupPanel() {
+function BackupGroup() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<Extract<ValidationResult, { ok: true }> | null>(null)
   const [folderName, setFolderName] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
   const retention = useSetting(RETENTION_KEY, 30)
-  const history = useLiveQuery(
-    () => db.backupHistory.orderBy('createdAt').reverse().limit(5).toArray(),
+  const last = useLiveQuery(
+    () =>
+      db.backupHistory
+        .orderBy('createdAt')
+        .reverse()
+        .filter((h) => h.status === 'success')
+        .first(),
     [],
   )
   const supported = folderBackupSupported()
@@ -285,156 +234,113 @@ function BackupPanel() {
     }
   }
 
-  const last = history?.find((h) => h.status === 'success')
-
   return (
-    <Panel>
-      <PanelHead title="Backup & restore" sub="Keep a copy of your data somewhere safe" />
-      <div className="mb-3 rounded-xl bg-surface2 px-3 py-2 text-xs">
-        {last ? (
-          <>
-            Last backup: <b>{new Date(last.createdAt).toLocaleString()}</b> ·{' '}
-            {last.destination === 'folder' ? 'folder' : 'download'}
-          </>
-        ) : (
-          <span className="text-amber-ink">No backup yet — export one now.</span>
-        )}
+    <Group>
+      <div className="px-3.5 py-3">
+        <div className="text-sm">Backup</div>
+        <div className="text-[11px] text-muted">
+          {last
+            ? `Last backup ${new Date(last.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+            : 'No backup yet. Save one now and then.'}
+        </div>
+        <div className="mt-2.5 flex gap-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              try {
+                await exportToDownload()
+                toast('Backup saved to your downloads', { emoji: '💾' })
+              } catch {
+                toast('Backup failed', { emoji: '⚠️' })
+              }
+            }}
+          >
+            Save backup
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
+            Restore from file
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void onFile(f)
+              e.target.value = ''
+            }}
+          />
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true)
-            try {
-              const name = await exportToDownload()
-              toast(`Exported ${name}`, { emoji: '📦' })
-            } catch {
-              toast('Export failed', { emoji: '⚠️' })
-            } finally {
-              setBusy(false)
-            }
-          }}
-        >
-          <Download size={16} /> Export JSON
-        </Button>
-        <Button variant="outline" onClick={() => fileRef.current?.click()}>
-          <Upload size={16} /> Import…
-        </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void onFile(f)
-            e.target.value = ''
-          }}
-        />
-      </div>
-
-      <div className="mt-5 border-t border-line-soft pt-4">
-        <h3 className="mb-1 flex items-center gap-2 text-sm font-bold">
-          <FolderOpen size={16} /> Folder backup
-        </h3>
-        {!supported ? (
-          <p className="text-xs text-muted">
-            Your browser doesn't support saving to a folder. Use “Export JSON” — it works
-            everywhere.
+      {supported && (
+        <details className="px-3.5 py-3 text-sm">
+          <summary className="cursor-pointer">Automatic daily backup to a folder</summary>
+          <p className="mt-2 text-xs text-muted">
+            {folderName
+              ? `Saving one copy a day to “${folderName}” when you open DayNest.`
+              : 'Pick a folder, for example a Google Drive folder on this device. DayNest saves one copy a day whenever you open it.'}
           </p>
-        ) : (
-          <>
-            <p className="mb-3 text-xs text-muted">
-              {folderName ? (
-                <>
-                  Saving daily snapshots to <b>“{folderName}”</b> when you open DayNest (one per
-                  day).
-                </>
-              ) : (
-                'Pick a folder (e.g. a synced cloud drive folder) for automatic daily snapshots while the app is open.'
-              )}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="soft"
-                onClick={async () => {
-                  try {
-                    const n = await chooseFolder()
-                    if (n) {
-                      setFolderName(n)
-                      const r = await backupToFolder(true)
-                      toast(r.message, { emoji: r.ok ? '📁' : '⚠️' })
-                    }
-                  } catch {
-                    /* user cancelled */
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="soft"
+              onClick={async () => {
+                try {
+                  const n = await chooseFolder()
+                  if (n) {
+                    setFolderName(n)
+                    const r = await backupToFolder(true)
+                    toast(r.message, { emoji: r.ok ? '📁' : '⚠️' })
                   }
-                }}
-              >
-                {folderName ? 'Change folder' : 'Choose folder'}
-              </Button>
-              {folderName && (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      const r = await backupToFolder(true)
-                      toast(r.message, { emoji: r.ok ? '✅' : '⚠️' })
-                    }}
-                  >
-                    Back up now
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      await forgetFolder()
-                      setFolderName(null)
-                    }}
-                  >
-                    Stop
-                  </Button>
-                </>
-              )}
-            </div>
+                } catch {
+                  /* cancelled */
+                }
+              }}
+            >
+              {folderName ? 'Change folder' : 'Choose folder'}
+            </Button>
             {folderName && (
-              <label className="mt-3 flex items-center justify-between gap-3 text-xs text-muted">
-                Keep the latest
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    const r = await backupToFolder(true)
+                    toast(r.message, { emoji: r.ok ? '✅' : '⚠️' })
+                  }}
+                >
+                  Back up now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    await forgetFolder()
+                    setFolderName(null)
+                  }}
+                >
+                  Stop
+                </Button>
                 <Select
-                  className="max-w-32"
+                  className="!min-h-9 max-w-36 text-xs"
                   value={retention}
                   onChange={(e) => setSetting(RETENTION_KEY, Number(e.target.value))}
+                  aria-label="How many copies to keep"
                 >
-                  {[7, 14, 30, 60, 90].map((n) => (
+                  {[7, 14, 30, 60].map((n) => (
                     <option key={n} value={n}>
-                      {n} snapshots
+                      Keep {n} copies
                     </option>
                   ))}
                 </Select>
-              </label>
+              </>
             )}
-          </>
-        )}
-      </div>
-
-      {!!history?.length && (
-        <details className="mt-4 text-xs text-muted">
-          <summary className="cursor-pointer font-semibold">Recent backup activity</summary>
-          <ul className="mt-2 grid gap-1">
-            {history.map((h) => (
-              <li key={h.id} className="flex justify-between gap-2">
-                <span className="truncate">{h.filename}</span>
-                <span className={h.status === 'success' ? 'text-sage-ink' : 'text-rose-ink'}>
-                  {h.status === 'success' ? '✓' : (h.errorMessage ?? 'failed')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          </div>
         </details>
       )}
-
       {pending && <ImportDialog pending={pending} onClose={() => setPending(null)} />}
-    </Panel>
+    </Group>
   )
 }
 
