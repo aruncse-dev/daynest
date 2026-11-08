@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f8f4">
+<title>DayNest — Daily life, gently organised</title>
+<style>
+:root{
+  --bg:#f5f6f2;--surface:#fff;--surface2:#eef1eb;--ink:#202820;--muted:#778077;
+  --line:#e5e9e1;--green:#47765b;--green2:#e4eee5;--amber:#f4ead2;--rose:#f5e5df;
+  --shadow:0 8px 28px rgba(35,50,38,.06);--radius:20px;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input{font:inherit} button{cursor:pointer}
+.app{max-width:1120px;margin:auto;min-height:100dvh;padding:22px 24px 100px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:19px;letter-spacing:-.5px}
+.logo{width:38px;height:38px;border-radius:13px;background:#dce9dc;display:grid;place-items:center;color:#3d6b50;font-size:20px}
+.top-actions{display:flex;gap:9px;align-items:center}
+.iconbtn{width:40px;height:40px;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--ink)}
+.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#e9dfd0;font-size:17px}
+.greeting{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:22px}
+.eyebrow{color:var(--muted);font-size:13px;font-weight:600}
+h1{font-size:clamp(27px,5vw,36px);line-height:1.12;letter-spacing:-1.3px;margin:5px 0 0}
+.date-pill{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:9px 13px;color:var(--muted);font-size:12px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:17px;padding:16px}
+.stat strong{display:block;font-size:25px;letter-spacing:-1px}.stat span{font-size:12px;color:var(--muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,.85fr);gap:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:19px;box-shadow:var(--shadow);margin-bottom:16px}
+.panelhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+h2{font-size:16px;margin:0;letter-spacing:-.3px}.sub{font-size:12px;color:var(--muted)}
+.link{border:0;background:none;color:var(--green);font-size:12px;font-weight:700;padding:4px}
+.tasklist{display:grid;gap:11px}
+.task{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #f0f2ee}
+.task:last-child{border:0;padding-bottom:0}
+.check{width:21px;height:21px;border:1.5px solid #cbd4c9;border-radius:7px;background:white;flex:none;display:grid;place-items:center;color:white;font-size:13px}
+.check.done{background:var(--green);border-color:var(--green)}
+.taskname{flex:1;font-size:13px;font-weight:600}.taskname.done{text-decoration:line-through;color:#9aa39a}
+.meta{font-size:11px;color:var(--muted);margin-top:2px}.priority{font-size:10px;border-radius:99px;padding:4px 8px;background:var(--rose);color:#9a604d}
+.habits{display:grid;gap:12px}
+.habit{display:flex;align-items:center;gap:10px}.habit-icon{width:34px;height:34px;border-radius:11px;background:var(--surface2);display:grid;place-items:center}
+.habit-info{flex:1}.habit-info b{font-size:13px;display:block}.habit-info small{font-size:11px;color:var(--muted)}
+.habit-check{width:27px;height:27px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--green);font-weight:800}
+.habit-check.done{background:var(--green2);border-color:#cfe0d0}
+.progress{height:6px;background:#edf0eb;border-radius:99px;margin-top:15px;overflow:hidden}.progress i{display:block;height:100%;width:60%;background:#6d9878;border-radius:99px}
+.family{display:grid;gap:12px}.member{display:flex;align-items:center;gap:10px}.member .avatar{width:34px;height:34px;font-size:14px}.member-name{flex:1;font-size:13px;font-weight:650}.member small{display:block;color:var(--muted);font-size:11px;font-weight:400}.count{font-size:12px;color:var(--muted)}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;text-align:center}.day{padding:9px 0;border-radius:12px;font-size:11px;color:var(--muted)}.day b{display:block;font-size:13px;color:var(--ink);margin-top:5px}.day.active{background:var(--green);color:#fff}.day.active b{color:#fff}
+.event{display:flex;gap:10px;align-items:center;margin-top:12px}.eventdate{background:var(--amber);border-radius:10px;padding:7px 9px;text-align:center;font-size:10px;color:#8a6a32}.eventdate b{display:block;font-size:15px}.eventname{font-size:12px;font-weight:650}.eventname small{display:block;color:var(--muted);font-weight:400;margin-top:2px}
+.bottomnav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);backdrop-filter:blur(16px);border-top:1px solid var(--line);display:flex;justify-content:center;gap:0;padding:8px 8px max(8px,env(safe-area-inset-bottom));z-index:5}
+.navitem{width:min(20%,110px);border:0;background:none;color:#899189;font-size:10px;padding:5px 0;display:grid;justify-items:center;gap:3px}.navitem span{font-size:19px}.navitem.active{color:var(--green);font-weight:750}
+.fab{position:fixed;right:max(20px,calc((100vw - 1120px)/2 + 24px));bottom:82px;border:0;border-radius:16px;background:var(--green);color:#fff;padding:13px 17px;box-shadow:0 8px 20px #47765b40;font-weight:700}
+.toast{position:fixed;left:50%;bottom:145px;transform:translateX(-50%);background:#26352a;color:#fff;border-radius:99px;padding:10px 15px;font-size:12px;opacity:0;pointer-events:none;transition:.2s}.toast.show{opacity:1}
+.modal{display:none;position:fixed;inset:0;background:#18221c66;z-index:10;align-items:end;justify-content:center;padding:14px}.modal.show{display:flex}.sheet{background:#fff;border-radius:22px 22px 18px 18px;padding:22px;width:min(100%,440px)}.sheet h2{margin-bottom:15px}.sheet input{width:100%;border:1px solid var(--line);border-radius:12px;padding:13px;margin:6px 0 13px}.primary{width:100%;border:0;border-radius:12px;padding:13px;background:var(--green);color:#fff;font-weight:700}
+@media(min-width:700px){.bottomnav{position:static;background:transparent;border:0;backdrop-filter:none;justify-content:flex-start;padding:0;margin:0 0 18px;gap:8px}.navitem{width:auto;display:flex;align-items:center;gap:7px;padding:9px 13px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:12px}.navitem span{font-size:15px}.fab{bottom:28px}.app{padding-bottom:30px}}
+@media(max-width:699px){.app{padding:17px 15px 105px}.greeting{align-items:start;flex-direction:column}.date-pill{align-self:flex-start}.layout{grid-template-columns:1fr;gap:0}.stats{gap:8px}.stat{padding:13px 11px}.stat strong{font-size:22px}.panel{padding:16px}.topbar{margin-bottom:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><div class="logo">✳</div>daynest</div>
+    <div class="top-actions"><button class="iconbtn" aria-label="Notifications" onclick="toast('You are all caught up')">♧</button><div class="avatar" title="Your profile">A</div></div>
+  </header>
+  <nav class="bottomnav" aria-label="Main navigation">
+    <button class="navitem active" data-tab="Home"><span>⌂</span>Home</button>
+    <button class="navitem" data-tab="Tasks"><span>☷</span>Tasks</button>
+    <button class="navitem" data-tab="Habits"><span>◷</span>Habits</button>
+    <button class="navitem" data-tab="Calendar"><span>▦</span>Calendar</button>
+    <button class="navitem" data-tab="Family"><span>♡</span>Family</button>
+  </nav>
+  <section class="greeting">
+    <div><div class="eyebrow">SUNDAY · A FRESH START</div><h1>Good evening, Arun 👋</h1><div class="sub" style="margin-top:7px">A little progress is still progress.</div></div>
+    <div class="date-pill">Sunday, 8 November</div>
+  </section>
+  <section class="stats">
+    <div class="stat"><strong id="taskStat">2/4</strong><span>Tasks completed</span></div>
+    <div class="stat"><strong id="habitStat">2/4</strong><span>Habits completed</span></div>
+    <div class="stat"><strong>50%</strong><span>Daily progress</span></div>
+  </section>
+  <div class="layout">
+    <main>
+      <section class="panel">
+        <div class="panelhead"><div><h2>Today's priorities</h2><div class="sub">Focus on what matters most</div></div><button class="link" onclick="openModal('task')">+ Add task</button></div>
+        <div class="tasklist" id="tasks">
+          <div class="task"><button class="check done" aria-label="Mark incomplete" onclick="toggleTask(this)">✓</button><div style="flex:1"><div class="taskname done">Review project plan</div><div class="meta">Work · 10:00 AM</div></div><span class="priority">High</span></div>
+          <div class="task"><button class="check done" aria-label="Mark incomplete" onclick="toggleTask(this)">✓</button><div style="flex:1"><div class="taskname done">Pay electricity bill</div><div class="meta">Personal · Today</div></div></div>
+          <div class="task"><button class="check" aria-label="Mark complete" onclick="toggleTask(this)"></button><div style="flex:1"><div class="taskname">Play with kids for 30 minutes</div><div class="meta">Family · Evening</div></div><span class="priority" style="background:var(--amber);color:#8a6a32">Important</span></div>
+          <div class="task"><button class="check" aria-label="Mark complete" onclick="toggleTask(this)"></button><div style="flex:1"><div class="taskname">Plan the coming week</div><div class="meta">Personal · 8:30 PM</div></div></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panelhead"><div><h2>Daily habits</h2><div class="sub">Small actions, repeated consistently</div></div><button class="link" onclick="toast('Habit management preview')">See all</button></div>
+        <div class="habits" id="habits">
+          <div class="habit"><div class="habit-icon">🚶</div><div class="habit-info"><b>Morning walk</b><small>20 minutes</small></div><button class="habit-check done" onclick="toggleHabit(this)">✓</button></div>
+          <div class="habit"><div class="habit-icon">💧</div><div class="habit-info"><b>Drink enough water</b><small>Daily wellness</small></div><button class="habit-check" onclick="toggleHabit(this)">○</button></div>
+          <div class="habit"><div class="habit-icon">📚</div><div class="habit-info"><b>Read with kids</b><small>15 minutes</small></div><button class="habit-check done" onclick="toggleHabit(this)">✓</button></div>
+          <div class="habit"><div class="habit-icon">📵</div><div class="habit-info"><b>Screen-free family time</b><small>After dinner</small></div><button class="habit-check" onclick="toggleHabit(this)">○</button></div>
+        </div>
+        <div class="progress"><i id="habitProgress" style="width:50%"></i></div>
+      </section>
+    </main>
+    <aside>
+      <section class="panel">
+        <div class="panelhead"><div><h2>This week</h2><div class="sub">Your gentle overview</div></div><button class="link" onclick="toast('Calendar preview')">Calendar</button></div>
+        <div class="week">
+          <div class="day">M<b>9</b></div><div class="day">T<b>10</b></div><div class="day">W<b>11</b></div><div class="day">T<b>12</b></div><div class="day">F<b>13</b></div><div class="day">S<b>14</b></div><div class="day active">S<b>8</b></div>
+        </div>
+        <div class="event"><div class="eventdate"><b>10</b>NOV</div><div class="eventname">School activity<small>Monday · 9:00 AM</small></div></div>
+        <div class="event"><div class="eventdate"><b>12</b>NOV</div><div class="eventname">Important appointment<small>Wednesday · 11:30 AM</small></div></div>
+      </section>
+      <section class="panel">
+        <div class="panelhead"><div><h2>Family corner</h2><div class="sub">A shared view of little wins</div></div><button class="link" onclick="toast('Family profiles preview')">Manage</button></div>
+        <div class="family">
+          <div class="member"><div class="avatar">A</div><div class="member-name">Arun<small>Personal</small></div><div class="count">2/4 habits</div></div>
+          <div class="member"><div class="avatar" style="background:#f0dfdf">W</div><div class="member-name">Wife<small>Personal</small></div><div class="count">3/4 habits</div></div>
+          <div class="member"><div class="avatar" style="background:#e6e2f1">👧</div><div class="member-name">Child 1<small>Learning & play</small></div><div class="count">3 activities</div></div>
+          <div class="member"><div class="avatar" style="background:#dfeaf0">👦</div><div class="member-name">Child 2<small>Learning & play</small></div><div class="count">2 activities</div></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panelhead"><h2>Keep it simple</h2><span>🌱</span></div>
+        <div class="sub">You don't have to do everything today. Choose a few things that make the day meaningful.</div>
+      </section>
+    </aside>
+  </div>
+</div>
+<button class="fab" onclick="openModal('task')">＋ Quick add</button>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="sheet"><h2 id="modalTitle">Add a task</h2><input id="newTask" placeholder="What would you like to do?" maxlength="100"><button class="primary" onclick="addTask()">Add to today</button></div>
+</div>
+<script>
+function toast(msg){const el=document.get.getElementById('toast');}
+function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.remove('show'),1900)}
+function toast(msg){showToast(msg)}
+function toggleTask(btn){btn.classList.toggle('done');btn.textContent=btn.classList.contains('done')?'✓':'';btn.setAttribute('aria-label',btn.classList.contains('done')?'Mark incomplete':'Mark complete');btn.nextElementSibling.querySelector('.taskname').classList.toggle('done');updateCounts()}
+function toggleHabit(btn){btn.classList.toggle('done');btn.textContent=btn.classList.contains('done')?'✓':'○';updateCounts()}
+function updateCounts(){const tasks=[...document.querySelectorAll('#tasks .check')];const habits=[...document.querySelectorAll('#habits .habit-check')];document.getElementById('taskStat').textContent=tasks.filter(x=>x.classList.contains('done')).length+'/'+tasks.length;const done=habits.filter(x=>x.classList.contains('done')).length;document.getElementById('habitStat').textContent=done+'/'+habits.length;document.getElementById('habitProgress').style.width=(habits.length?done/habits.length*100:0)+'%'}
+function openModal(){document.getElementById('modal').classList.add('show');document.getElementById('newTask').focus()}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function addTask(){const input=document.getElementById('newTask');const value=input.value.trim();if(!value)return;const row=document.createElement('div');row.className='task';row.innerHTML='<button class="check" aria-label="Mark complete" onclick="toggleTask(this)"></button><div style="flex:1"><div class="taskname"></div><div class="meta">Personal · Today</div></div>';row.querySelector('.taskname').textContent=value;document.getElementById('tasks').appendChild(row);input.value='';closeModal();updateCounts();showToast('Task added')}
+document.getElementById('newTask').addEventListener('keydown',e=>{if(e.key==='Enter')addTask()});
+document.querySelectorAll('.navitem').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.navitem').forEach(x=>x.classList.remove('active'));btn.classList.add('active');if(btn.dataset.tab!=='Home')showToast(btn.dataset.tab+' screen — implementation phase')}));
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# dependencies & build
+node_modules
+dist
+dev-dist
+coverage
+*.tsbuildinfo
+.vercel
+
+# environment
+.env
+.env.*
+!.env.example
+
+# NEVER commit personal data, exports or backups
+exports/
+backups/
+local-data/
+daynest-backup-*.json
+*.daynest.json
+
+# editor / os
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.log

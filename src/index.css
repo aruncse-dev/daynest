@@ -1,0 +1,322 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --bg: #f5f6f2;
+  --surface: #ffffff;
+  --surface2: #eef1eb;
+  --ink: #202820;
+  --muted: #6f786f;
+  --line: #e5e9e1;
+  --line-soft: #f0f2ee;
+  --green: #47765b;
+  --green-ink: #3d6b50;
+  --green2: #e4eee5;
+  --green3: #cfe0d0;
+  --amber: #f4ead2;
+  --amber-ink: #8a6a32;
+  --rose: #f5e5df;
+  --rose-ink: #9a604d;
+  --lilac: #e6e2f1;
+  --sky: #dfeaf0;
+  --nav: rgba(255, 255, 255, 0.92);
+  --shadow: 0 8px 28px rgba(35, 50, 38, 0.06);
+  --blob1: #d9eadb;
+  --blob2: #eef3dc;
+  --blob3: #dbe9e6;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #121814;
+  --surface: #1a221d;
+  --surface2: #222d26;
+  --ink: #e7ede7;
+  --muted: #9aa69c;
+  --line: #2b3830;
+  --line-soft: #243029;
+  --green: #6fa384;
+  --green-ink: #9cc8aa;
+  --green2: #23382b;
+  --green3: #2f4a39;
+  --amber: #3a3222;
+  --amber-ink: #e3c78d;
+  --rose: #3b2a25;
+  --rose-ink: #e9a995;
+  --lilac: #2c2a38;
+  --sky: #233038;
+  --nav: rgba(22, 30, 25, 0.92);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  --blob1: #1d3527;
+  --blob2: #232e1d;
+  --blob3: #1b2f2c;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-sage: var(--green);
+  --color-sage-ink: var(--green-ink);
+  --color-sage-soft: var(--green2);
+  --color-sage-line: var(--green3);
+  --color-amber-soft: var(--amber);
+  --color-amber-ink: var(--amber-ink);
+  --color-rose-soft: var(--rose);
+  --color-rose-ink: var(--rose-ink);
+  --color-lilac: var(--lilac);
+  --color-sky: var(--sky);
+  --shadow-soft: var(--shadow);
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Grid/flex children default to min-width:auto and can push past narrow screens */
+.grid > * {
+  min-width: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ---------- Animations ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(4%, -3%) scale(1.06);
+  }
+  66% {
+    transform: translate(-3%, 4%) scale(0.96);
+  }
+}
+@keyframes float-leaf {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.55;
+  }
+  90% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(-110vh) rotate(260deg);
+    opacity: 0;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ripple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+@keyframes sparkle {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+@keyframes bell {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(14deg);
+  }
+  40% {
+    transform: rotate(-12deg);
+  }
+  60% {
+    transform: rotate(8deg);
+  }
+  80% {
+    transform: rotate(-4deg);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.animate-pop {
+  animation: pop 0.35s ease-out;
+}
+.animate-sheet {
+  animation: sheet-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-fade {
+  animation: fade 0.2s ease-out both;
+}
+.animate-bell {
+  animation: bell 0.9s ease-in-out;
+}
+.stagger > * {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 0.15s;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.stagger > *:nth-child(n + 6) {
+  animation-delay: 0.25s;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  animation: drift 26s ease-in-out infinite;
+}
+.leaf {
+  position: absolute;
+  bottom: -40px;
+  animation: float-leaf linear infinite;
+  pointer-events: none;
+  user-select: none;
+}
+.ripple-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: ripple 4s ease-out infinite;
+}
+.spark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: sparkle 0.6s ease-out forwards;
+}
+.shimmer-text {
+  background: linear-gradient(90deg, var(--green-ink), #8bb89a, var(--green-ink));
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .leaf,
+  .ripple-ring {
+    display: none;
+  }
+}
