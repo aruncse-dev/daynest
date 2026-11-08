@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { AnimatedBackground } from './AnimatedBackground'
@@ -18,11 +19,13 @@ export function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const showFab = pathname === '/' || pathname === '/plan'
+  // toasts belong to the screen they were shown on
+  useEffect(() => useUI.setState({ toasts: [] }), [pathname])
 
   return (
     <>
       <AnimatedBackground leaves={5} />
-      <div className="mx-auto min-h-dvh w-full max-w-[480px] px-4 pb-[96px] pt-[max(14px,env(safe-area-inset-top))]">
+      <div className="mx-auto min-h-dvh w-full max-w-[480px] px-4 pb-[150px] pt-[max(14px,env(safe-area-inset-top))]">
         <header className="mb-3 flex items-center justify-between">
           <NavLink to="/" className="flex items-center gap-2 text-lg font-bold tracking-[-.5px]">
             <img src="/favicon.svg" alt="" className="size-9 rounded-xl shadow-sm" />

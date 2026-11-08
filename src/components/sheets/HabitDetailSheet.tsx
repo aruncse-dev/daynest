@@ -32,6 +32,8 @@ export function HabitDetailSheet({ habitId }: { habitId: string }) {
     [habitId],
   )
   if (!habit || !done) return null
+  // earliest of creation date and first check-in (history can be filled in for earlier days)
+  const startedOn = [toLocalDate(new Date(habit.createdAt)), ...done].sort()[0]
   const grid = monthGrid(month)
   const cur = currentStreak(habit, done, today)
   const best = longestStreak(habit, done, today)
@@ -99,6 +101,7 @@ export function HabitDetailSheet({ habitId }: { habitId: string }) {
           ))}
           {grid.map((d) => {
             const future = compareLocal(d, today) > 0
+            const before = compareLocal(d, startedOn) < 0 // the habit didn't exist yet
             const isDone = done.has(d)
             return (
               <button
@@ -112,7 +115,7 @@ export function HabitDetailSheet({ habitId }: { habitId: string }) {
                   !sameMonth(d, month) && 'invisible',
                   isDone
                     ? 'bg-sage font-bold text-white'
-                    : isScheduledOn(habit, d) && !future
+                    : isScheduledOn(habit, d) && !future && !before
                       ? 'bg-surface2'
                       : 'text-muted/40',
                   d === today && 'ring-2 ring-sage/50',
