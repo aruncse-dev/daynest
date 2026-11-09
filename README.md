@@ -1,5 +1,7 @@
 # DayNest 🌿
 
+**Live:** https://daynestapp.vercel.app
+
 **Brighter days, one small step at a time.** Plan your day, keep a few habits you choose, get friendly nudges, and put the phone down at night.
 
 DayNest is a mobile web app. The app loads from the web (Vercel); **everything you enter is saved only on your phone** in browser storage (IndexedDB). No account, no server database, no analytics.
@@ -95,12 +97,14 @@ src/
 
 ## Deploy (Vercel, main branch only)
 
-`vercel.json` contains an `ignoreCommand` so **only commits to `main` are built and deployed**. Other branches are skipped.
+Live at **https://daynestapp.vercel.app**. Every push or merge to `main` deploys to production automatically. Other branches never deploy (`vercel.json`: `git.deploymentEnabled` plus `ignoreCommand`).
 
-One-time setup (needs your Vercel login):
+Vercel project settings that must match:
 
-1. vercel.com → **Add New → Project** → import `aruncse-dev/daynest`.
-2. Framework **Vite** is detected (`npm run build` → `dist`). No environment variables needed. Production branch: `main`.
-3. Deploy. From then on every push to `main` redeploys automatically.
+- **Production branch = `main`** (Settings → Environments → Production → Branch Tracking).
+- Environment variables (Production), for reminders when the app is closed. Both are public values:
+  - `VITE_PUSH_URL` = `https://daynest-push.aruncse17.workers.dev`
+  - `VITE_PUSH_PUBLIC_KEY` = the VAPID public key (also in `push/wrangler.toml`)
+- After changing environment variables, redeploy once. They're baked in at build time.
 
 On your phone, open the site → browser menu → **Add to Home Screen / Install app**.
