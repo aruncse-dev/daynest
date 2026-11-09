@@ -127,6 +127,9 @@ export function Settings() {
       <div className="flex items-center justify-between gap-3 px-1">
         <span className="text-[11px] text-muted">
           DayNest {__APP_VERSION__} · data v{SCHEMA_VERSION}
+          <br />
+          build {__BUILD_ID__} ·{' '}
+          {new Date(__BUILD_TIME__).toLocaleDateString([], { day: 'numeric', month: 'short' })}
         </span>
         <ConfirmButton
           className="!min-h-9 !px-3 !text-xs"
