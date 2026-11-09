@@ -10,8 +10,8 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "daynest-push"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "4b4340be-9168-4d66-baee-35a437f07e52"
 
 [vars]
-ALLOWED_ORIGIN = "https://REPLACE-WITH-YOUR-APP.vercel.app"
-VAPID_PUBLIC_KEY = "REPLACE_WITH_PUBLIC_KEY_FROM_npm_run_push_keys"
+ALLOWED_ORIGIN = "https://daynestapp.vercel.app"
+VAPID_PUBLIC_KEY = "BPDsAcu5HvQUVmiQ3INypzZbw3s6shBa0kUAKi8GGrw0lCpVYqeDQzkZtZe9hC2txj0rR6pi_C3suNJGHlUaimk"
