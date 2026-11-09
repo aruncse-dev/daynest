@@ -151,4 +151,28 @@ describe('push worker', () => {
     // cron was down for 30 minutes: don't deliver a half-hour-old reminder
     expect(await runCron(store, cfg, NOW + 30 * 60000, ok)).toMatchObject({ due: 1, sent: 0 })
   })
+
+  it('accepts any of several comma-separated origins', async () => {
+    const store = new MemoryStore()
+    const cfg = {
+      ...(await config()),
+      allowedOrigin: 'https://daynest.vercel.app, https://day.example.com/',
+    }
+    const body = {
+      id: 'device-1234',
+      secret: 'a'.repeat(40),
+      subscription: subscription(),
+      slots: [],
+    }
+    expect(
+      (await handleRequest(req('POST', body, 'https://day.example.com'), store, cfg, NOW)).status,
+    ).toBe(200)
+    expect(
+      (await handleRequest(req('POST', body, 'https://daynest.vercel.app'), store, cfg, NOW))
+        .status,
+    ).toBe(200)
+    expect(
+      (await handleRequest(req('POST', body, 'https://other.vercel.app'), store, cfg, NOW)).status,
+    ).toBe(403)
+  })
 })

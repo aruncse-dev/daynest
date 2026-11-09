@@ -16,8 +16,20 @@ async function sha256(text: string): Promise<string> {
   return [...d].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** ALLOWED_ORIGIN may list several addresses, comma-separated (e.g. vercel.app + a custom domain). */
+function originAllowed(cfg: Config, origin: string | null): boolean {
+  if (cfg.allowedOrigin === '*') return true
+  return (
+    !!origin &&
+    cfg.allowedOrigin
+      .split(',')
+      .map((o) => o.trim().replace(/\/$/, ''))
+      .includes(origin)
+  )
+}
+
 function cors(cfg: Config, origin: string | null): Record<string, string> {
-  const ok = cfg.allowedOrigin === '*' || origin === cfg.allowedOrigin
+  const ok = originAllowed(cfg, origin)
   return ok
     ? {
         'Access-Control-Allow-Origin': cfg.allowedOrigin === '*' ? '*' : origin!,
@@ -60,7 +72,7 @@ export async function handleRequest(
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h })
   if (url.pathname === '/health') return json({ ok: true }, 200, h)
   if (url.pathname !== '/schedule') return json({ error: 'Not found' }, 404, h)
-  if (cfg.allowedOrigin !== '*' && req.headers.get('Origin') !== cfg.allowedOrigin)
+  if (!originAllowed(cfg, req.headers.get('Origin')))
     return json({ error: 'Origin not allowed' }, 403, h)
 
   let body: ScheduleBody
