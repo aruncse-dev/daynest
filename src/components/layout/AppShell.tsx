@@ -10,7 +10,6 @@ import { Toasts } from './Toasts'
 import { NudgeHost } from './NudgeHost'
 import { SheetHost } from '@/components/sheets/SheetHost'
 import { UpdatePrompt } from './UpdatePrompt'
-import { PhoneFreeGuard } from './PhoneFreeGuard'
 
 /** Mobile-first single column. On larger screens the same phone layout is centred. */
 export function AppShell() {
@@ -93,7 +92,6 @@ export function AppShell() {
         </div>
       )}
 
-      <PhoneFreeGuard />
       <NudgeHost />
       <Toasts />
       <SheetHost />

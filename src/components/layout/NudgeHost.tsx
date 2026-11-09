@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import type { Reminder } from '@/db/types'
 import { db } from '@/db/db'
 import { nowIso } from '@/lib/date'
-import { completeLinked } from '@/db/links'
+import { canCompleteFromReminder, completeLinked } from '@/db/links'
 import { smileLine } from '@/lib/wellness'
 import { toast, useUI } from '@/store/ui'
 import { cx } from '@/components/ui'
@@ -156,7 +156,7 @@ function HighPriorityNudge({ reminder: r }: { reminder: Reminder }) {
                 style.theme === 'night' ? 'bg-white text-[#1f2a44]' : 'bg-sage text-white',
               )}
             >
-              {r.link && r.link.type !== 'event' ? 'Mark done ✓' : 'Done ✓'}
+              {canCompleteFromReminder(r) ? 'Mark done ✓' : 'Done ✓'}
             </button>
             <button
               type="button"
@@ -216,7 +216,7 @@ function GentleNudge({ reminder: r }: { reminder: Reminder }) {
               )}
               onClick={done}
             >
-              {r.link && r.link.type !== 'event' ? 'Mark done ✓' : 'Done ✓'}
+              {canCompleteFromReminder(r) ? 'Mark done ✓' : 'Done ✓'}
             </button>
             <button
               type="button"

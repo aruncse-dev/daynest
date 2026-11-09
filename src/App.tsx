@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import { SETTING_ONBOARDED } from '@/db/keys'
 import { maybeDailySnapshot } from '@/lib/folderBackup'
+import { migratePhoneFree } from '@/db/phoneFree'
 import { useSetting } from '@/lib/hooks'
 import { AppShell } from '@/components/layout/AppShell'
 import { ReminderRunner } from '@/components/layout/ReminderRunner'
@@ -47,7 +48,9 @@ export default function App() {
   )
 
   useEffect(() => {
-    if (onboarded) void maybeDailySnapshot().catch(() => undefined)
+    if (!onboarded) return
+    void maybeDailySnapshot().catch(() => undefined)
+    void migratePhoneFree().catch(() => undefined)
   }, [onboarded])
 
   if (onboarded === undefined) {

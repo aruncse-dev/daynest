@@ -230,7 +230,21 @@ function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
   }, [today, night])
   if (!data) return null
 
-  // 1. phone-free: evening heads-up, then morning check-in
+  // 1. phone-free: a gentle (non-blocking) card during phone-free time, an evening heads-up,
+  //    then the morning check-in
+  if (data.habit && isQuietTime(quiet, now)) {
+    return (
+      <Card tone="night">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl anim-sway">🌙</span>
+          <span>
+            <b>It's phone-free time.</b> Wrap up what you came for and put the phone down.
+            Tomorrow-you says thanks.
+          </span>
+        </div>
+      </Card>
+    )
+  }
   const mins = minutesUntilQuiet(quiet, now)
   if (mins !== null && mins > 0 && mins <= 60) {
     return (

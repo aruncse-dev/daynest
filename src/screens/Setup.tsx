@@ -69,7 +69,6 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
     }
   }
   const enterApp = async () => {
-    await setSetting('setupFinishedAt', new Date().toISOString())
     await setSetting(SETTING_ONBOARDED, true)
     if (!onboarding) navigate('/')
   }

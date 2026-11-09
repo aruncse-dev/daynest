@@ -53,10 +53,6 @@ const shift = (t: string, mins: number) =>
 export function tunePreset(p: ReminderPreset, a: SetupAnswers): ReminderPreset {
   const night = a.phoneFreeAt ?? '22:00'
   switch (p.presetKey) {
-    case 'phonefree-soon':
-      return { ...p, times: [shift(night, -15)] }
-    case 'phonefree':
-      return { ...p, times: [night] }
     case 'water':
       return { ...p, startTime: shift(a.wake, 90), endTime: shift(night, -120) }
     default:
@@ -69,14 +65,7 @@ export function tunePreset(p: ReminderPreset, a: SetupAnswers): ReminderPreset {
  * time they chose) or simple planning routines. Health and calm items are never pre-ticked;
  * we don't know enough about anyone to recommend them.
  */
-const RECOMMENDED = new Set([
-  'phone-free-night',
-  'top3',
-  'plan-tomorrow',
-  'p:phonefree',
-  'p:phonefree-soon',
-  't:plan-week',
-])
+const RECOMMENDED = new Set(['phone-free-night', 'top3', 'plan-tomorrow', 't:plan-week'])
 
 export function suggest(a: SetupAnswers): Suggestion[] {
   const valid = new Set(FOCUS_AREAS.map((f) => f.key))
@@ -107,7 +96,6 @@ export function suggest(a: SetupAnswers): Suggestion[] {
   }
   for (const raw of REMINDER_PRESETS) {
     if (!areas.has(raw.area)) continue
-    if (raw.presetKey.startsWith('phonefree') && !a.phoneFreeAt) continue
     const p = tunePreset(raw, a)
     out.push({
       id: `p:${p.presetKey}`,

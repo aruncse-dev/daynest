@@ -35,7 +35,8 @@ async function titleFor(title: string, profileId?: string | null) {
 
 async function upsertLinked(
   link: ReminderLink,
-  fields: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days' | 'profileId'>,
+  fields: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days' | 'profileId'> &
+    Partial<Pick<Reminder, 'priority' | 'presetKey'>>,
 ) {
   const existing = await getLinkedReminder(link.type, link.id)
   fields = { ...fields, title: await titleFor(fields.title, fields.profileId) }
@@ -52,6 +53,31 @@ async function upsertLinked(
   }
   await db.reminders.put(row)
 }
+
+/**
+ * The phone-free habit's reminder: 15 minutes before phone-down time, marked important so it
+ * always comes through. It's a heads-up, so it has no "Mark done" (the habit is ticked in the morning).
+ */
+export async function syncPhoneFreeReminder(habit: Habit, phoneDownAt: string) {
+  await upsertLinked(
+    { type: 'habit', id: habit.id },
+    {
+      title: habit.title,
+      profileId: habit.profileId,
+      emoji: '🌙',
+      message: `Phone-free time at ${formatTime12(phoneDownAt)}. Time to wrap up and plug in away from bed.`,
+      times: [minutesToTime((timeToMinutes(phoneDownAt) - 15 + 1440) % 1440)],
+      days: [],
+      priority: 'high',
+      presetKey: PHONE_FREE_PRESET,
+    },
+  )
+}
+
+/** Reminders that are a heads-up only (no "Mark done"). */
+export const PHONE_FREE_PRESET = 'phonefree'
+export const canCompleteFromReminder = (r: Reminder) =>
+  !!r.link && r.link.type !== 'event' && r.presetKey !== PHONE_FREE_PRESET
 
 /** Habit reminder at one or more times on the habit's scheduled days. `times` empty = no reminder. */
 export async function syncHabitReminder(habit: Habit, times: string[]) {
@@ -144,7 +170,7 @@ export async function completeLinked(
   r: Reminder,
   today: LocalDate = todayLocal(),
 ): Promise<boolean> {
-  if (!r.link || r.link.type === 'event') return false
+  if (!r.link || !canCompleteFromReminder(r)) return false
   if (!(await linkedStillDue(r, today))) return false
   if (r.link.type === 'habit') {
     await toggleHabit(r.link.id, today)

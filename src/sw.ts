@@ -6,7 +6,7 @@ import {
 } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { db } from './db/db'
-import { completeLinked } from './db/links'
+import { canCompleteFromReminder, completeLinked } from './db/links'
 import { remindersDueAt } from './lib/pushSchedule'
 import { syncPush } from './lib/push'
 
@@ -53,7 +53,7 @@ async function onPush(atMs: number) {
       lastFiredSlot: new Date(atMs).toISOString(),
       snoozedUntil: null,
     })
-    const canComplete = !!r.link && r.link.type !== 'event'
+    const canComplete = canCompleteFromReminder(r)
     const options: ActionNotificationOptions = {
       body: r.message,
       tag: `reminder-${r.id}`,

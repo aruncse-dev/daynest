@@ -65,26 +65,4 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     times: ['13:00'],
     days: [],
   },
-  // phone-free pair: managed by the Phone-free evenings switch
-  {
-    presetKey: 'phonefree-soon',
-    area: 'digital',
-    title: 'Phone-free soon',
-    message: '15 minutes until phone-free time. Time to wrap up.',
-    emoji: '🔌',
-    kind: 'times',
-    times: ['21:45'],
-    days: [],
-  },
-  {
-    presetKey: 'phonefree',
-    area: 'digital',
-    priority: 'high',
-    title: 'Phone down, heart up',
-    message: 'Phone-free time starts now. Goodnight, screen.',
-    emoji: '🌙',
-    kind: 'times',
-    times: ['22:00'],
-    days: [],
-  },
 ]

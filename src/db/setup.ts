@@ -4,7 +4,7 @@ import { addLocalDays, nowIso, todayLocal, weekdayOf } from '@/lib/date'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import type { SetupAnswers, Suggestion } from '@/lib/suggest'
 import { getSetting, setSetting } from './actions'
-import { syncHabitReminder, syncTaskReminder } from './links'
+import { syncHabitReminder, syncPhoneFreeReminder, syncTaskReminder } from './links'
 import type { Habit, Task } from './types'
 import { ROLES, type FamilyRole } from '@/lib/family'
 
@@ -58,9 +58,9 @@ export async function applySuggestions(chosen: Suggestion[], answers: SetupAnswe
         updatedAt: now,
       }
       await db.habits.add(habit)
-      // the phone-free habit is reminded by the phone-free nudges instead
-      if (s.remindAt && s.template.key !== 'phone-free-night')
-        await syncHabitReminder(habit, [s.remindAt])
+      if (s.template.key === 'phone-free-night' && answers.phoneFreeAt)
+        await syncPhoneFreeReminder(habit, answers.phoneFreeAt)
+      else if (s.remindAt) await syncHabitReminder(habit, [s.remindAt])
       created++
     } else if (s.kind === 'nudge') {
       const { area: _area, ...preset } = s.preset

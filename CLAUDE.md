@@ -257,7 +257,7 @@ Daily snapshot policy:
 ### Direction update (owner feedback, Nov 2026)
 
 - **One phone, self-first, with family tracking.** Family members (spouse / child / parent / other) are local profiles on the same phone (no sharing/sync). The Family tab is always visible and offers role-based ideas that open prefilled editors. "For" pickers appear once a member exists; Today shows only your items.
-- **Mobile only, minimal navigation:** 4 tabs (Today · Plan · Routines · Family). Settings is one short page behind the avatar. Prefer one page with sections over sub-tabs. Keep padding tight.
+- **Mobile only, minimal navigation:** 4 tabs (Today · To-dos · Routines · Family). Settings is one short page behind the avatar. Prefer one page with sections over sub-tabs. Keep padding tight.
 - **Connected reminders:** habits, to-dos and events carry their own reminders (`Reminder.link`). They only fire when the item is due and not done; Done on the reminder completes the item; deleting the item deletes its reminder.
 - **Predefined content must suit anyone.** No niche presets (e.g. footwear, kids, work-only).
 - **No health advice.** No guided exercise, yoga or breathing content. Health items are neutral habits, never pre-ticked.

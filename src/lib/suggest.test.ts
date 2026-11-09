@@ -8,12 +8,13 @@ import { HABIT_TEMPLATES } from './templates'
 const base: SetupAnswers = { areas: ['organised', 'health'], wake: '06:30', phoneFreeAt: '22:00' }
 
 describe('setup suggestions', () => {
-  it('pre-ticks phone-free items when a phone-down time is chosen', () => {
+  it('pre-ticks the phone-free habit, with a reminder 15 minutes before phone-down time', () => {
     const s = suggest(base)
-    expect(s.find((x) => x.id === 'h:phone-free-night')?.title).toBe('No phone after 10 PM')
-    expect(s.find((x) => x.id === 'p:phonefree')?.recommended).toBe(true)
-    const soon = s.find((x) => x.id === 'p:phonefree-soon')
-    expect(soon?.kind === 'nudge' && soon.preset.times).toEqual(['21:45'])
+    const h = s.find((x) => x.id === 'h:phone-free-night')
+    expect(h?.title).toBe('No phone after 10 PM')
+    expect(h?.recommended).toBe(true)
+    expect(h?.kind === 'habit' && h.remindAt).toBe('21:45')
+    expect(s.some((x) => x.id.startsWith('p:phonefree'))).toBe(false)
   })
   it('never pre-ticks health or calm items', () => {
     const s = suggest({ ...base, areas: ['health', 'calm'] })

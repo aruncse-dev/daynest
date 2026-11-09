@@ -21,12 +21,16 @@ import {
   Button,
   ConfirmButton,
   IconButton,
+  Input,
   Segmented,
   Select,
   Sheet,
   Toggle,
 } from '@/components/ui'
 import { Tour } from '@/components/Tour'
+import { setPhoneFree } from '@/db/phoneFree'
+import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
+import { formatShort } from '@/lib/suggest'
 
 /** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
 export function Settings() {
@@ -98,6 +102,8 @@ export function Settings() {
         </Row>
       </Group>
 
+      <PhoneFreeGroup />
+
       <BackupGroup />
 
       <Group>
@@ -147,6 +153,70 @@ export function Settings() {
       {tour && <Tour onClose={() => setTour(false)} />}
     </div>
   )
+}
+
+/**
+ * Phone-free nights: quiet hours + a "No phone after 10 PM" habit with a reminder 15 minutes
+ * before. The habit and its reminder show up in Routines like any other.
+ */
+function PhoneFreeGroup() {
+  const quiet = useSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
+  const me = usePrimaryProfile()
+  const update = (patch: Partial<QuietHours>) =>
+    setPhoneFree({ ...quiet, ...patch }, me?.id ?? null)
+  return (
+    <Group>
+      <Row>
+        <span className="flex-1">
+          🌙 Phone-free nights
+          <small className="block text-[11px] text-muted">
+            {quiet.enabled
+              ? `Reminder at ${formatShort(shiftTime(quiet.start, -15))}, other reminders quiet until ${formatShort(quiet.end)}`
+              : 'A habit + reminder to put the phone down at night'}
+          </small>
+        </span>
+        <Toggle
+          checked={quiet.enabled}
+          onChange={(v) => update({ enabled: v, muteNudges: true })}
+          label="Phone-free nights"
+        />
+      </Row>
+      {quiet.enabled && (
+        <div className="grid gap-2 px-3.5 py-3 text-xs">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="grid gap-1">
+              <span className="text-muted">Phone down at</span>
+              <Input
+                type="time"
+                value={quiet.start}
+                onChange={(e) => e.target.value && update({ start: e.target.value })}
+                className="!min-h-10"
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-muted">Until</span>
+              <Input
+                type="time"
+                value={quiet.end}
+                onChange={(e) => e.target.value && update({ end: e.target.value })}
+                className="!min-h-10"
+              />
+            </label>
+          </div>
+          <p className="text-muted">
+            Important reminders still come through. A web app can't lock your phone. For extra help,
+            turn on <b>Bedtime mode</b> (Android) or <b>Downtime</b> (iPhone) for the same hours.
+          </p>
+        </div>
+      )}
+    </Group>
+  )
+}
+
+const shiftTime = (t: string, m: number) => {
+  const [h, mm] = t.split(':').map(Number)
+  const total = (((h * 60 + mm + m) % 1440) + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
 function Group({ children }: { children: ReactNode }) {

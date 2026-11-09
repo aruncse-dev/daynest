@@ -59,9 +59,15 @@ DayNest doesn't coach exercise, yoga or breathing. Health items are habits you t
 
 _Drink water, posture check, rest your eyes, take a pause, step outside_, plus the phone-free pair. Anything personal you create yourself (e.g. _take my tablet_). **Important** reminders stay on screen until you tap Done and still come through during phone-free time.
 
-### Phone-free evenings 🌙
+### Phone-free nights 🌙 (just a habit + reminder)
 
-One switch sets everything up: a heads-up 15 minutes before, an important _“Phone down, heart up”_ reminder (default 10 PM), a **No phone after 10 PM** habit, quiet reminders until morning, and a calm screen if you open DayNest late. Pair it with Android _Bedtime mode_ or iPhone _Downtime_, which can actually limit the phone.
+Turn it on in setup or **Settings → Phone-free nights**. It's built from the same pieces as everything else:
+
+- a **No phone after 10 PM** habit in Routines, ticked each morning via _“Did you have a phone-free night?”_
+- that habit's **reminder at 9:45 PM** (important, so it always comes through)
+- **quiet hours** until morning: ordinary reminders stay silent, Important ones still ring
+
+If you open DayNest during phone-free time, Today shows a gentle reminder card; it doesn't block you. For a real lock, pair it with Android _Bedtime mode_ or iPhone _Downtime_.
 
 ### Reminders when the app is closed (optional, free) 🔔
 

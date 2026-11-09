@@ -40,7 +40,13 @@ export const HABIT_TEMPLATES: HabitTemplate[] = [
     remind: { from: 'night', minutes: -75 },
   },
   { key: 'tidy', area: 'organised', title: 'Quick tidy', emoji: '🧹' },
-  { key: 'phone-free-night', area: 'digital', title: 'No phone after 10 PM', emoji: '📵' },
+  {
+    key: 'phone-free-night',
+    area: 'digital',
+    title: 'No phone after 10 PM',
+    emoji: '📵',
+    remind: { from: 'night', minutes: -15 },
+  },
   {
     key: 'phone-free-morning',
     area: 'digital',
