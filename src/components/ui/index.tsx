@@ -596,7 +596,7 @@ export function Sheet({
             <X size={20} />
           </button>
         </div>
-        <div className="grid gap-4 overflow-y-auto px-5 pb-4">{children}</div>
+        <div className="grid gap-4 overflow-y-auto px-5 pb-4 pt-1">{children}</div>
         {footer && (
           <div className="flex gap-2 border-t border-line-soft px-5 pb-safe pt-3 sm:pb-4">
             {footer}

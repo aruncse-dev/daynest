@@ -34,13 +34,13 @@ export function Plan() {
   const [tab, setTab] = useTab(TABS, 'tasks')
   return (
     <div>
-      <h1 className="mb-3 text-[24px] font-bold tracking-[-0.8px]">Plan</h1>
+      <h1 className="mb-3 text-[24px] font-bold tracking-[-0.8px]">To-dos</h1>
       <TabBar
         label="Plan"
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'tasks', label: 'Upcoming' },
+          { value: 'tasks', label: 'List' },
           { value: 'calendar', label: 'Calendar' },
         ]}
       />
@@ -56,6 +56,10 @@ export function Plan() {
 function TasksTab() {
   return (
     <div className="grid gap-3">
+      <div>
+        <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">Today</h2>
+        <TodayList />
+      </div>
       <div>
         <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
           Next 2 weeks
@@ -75,6 +79,37 @@ function TasksTab() {
         </div>
       </details>
     </div>
+  )
+}
+
+/** Every to-do for today (yours and the family's), including ones carried over from earlier days. */
+function TodayList() {
+  const today = useToday()
+  const openSheet = useUI((s) => s.openSheet)
+  const items = useDayTasks(today, { includeOverdue: true })
+  if (!items)
+    return (
+      <Panel>
+        <Skeleton />
+      </Panel>
+    )
+  return (
+    <Panel>
+      {items.length === 0 ? (
+        <div className="py-2 text-center text-xs text-muted">
+          Nothing for today.{' '}
+          <button
+            type="button"
+            className="font-bold text-sage-ink"
+            onClick={() => openSheet({ type: 'quickAdd' })}
+          >
+            + Add a to-do
+          </button>
+        </div>
+      ) : (
+        items.map((i) => <TaskRow key={i.task.id} item={i} />)
+      )}
+    </Panel>
   )
 }
 

@@ -14,7 +14,10 @@ export function PhoneFreeGuard() {
   const me = usePrimaryProfile()
   const [allowUntil, setAllowUntil] = useState(0)
   const [goodnight, setGoodnight] = useState(false)
-  if (!isQuietTime(quiet, now) || now.getTime() < allowUntil) return null
+  // don't block someone who has only just set the app up (e.g. late at night)
+  const setupAt = useSetting<string | null>('setupFinishedAt', null)
+  const justSetUp = !!setupAt && now.getTime() - new Date(setupAt).getTime() < 60 * 60_000
+  if (!isQuietTime(quiet, now) || now.getTime() < allowUntil || justSetUp) return null
 
   return createPortal(
     <div

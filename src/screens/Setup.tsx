@@ -69,6 +69,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
     }
   }
   const enterApp = async () => {
+    await setSetting('setupFinishedAt', new Date().toISOString())
     await setSetting(SETTING_ONBOARDED, true)
     if (!onboarding) navigate('/')
   }
@@ -103,7 +104,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
             )}
           </div>
         )}
-        <div key={step} className="flex-1 overflow-y-auto pb-4 animate-rise">
+        <div key={step} className="-mx-2 flex-1 overflow-y-auto px-2 pb-4 pt-3 animate-rise">
           {step === 'welcome' && <Welcome onStart={() => go(1)} onTour={() => setTour(true)} />}
           {step === 'you' && (
             <StepShell
@@ -344,7 +345,9 @@ function StepShell({
 }) {
   return (
     <div>
-      <div className="mb-2 text-4xl anim-wiggle [animation-iteration-count:1]">{emoji}</div>
+      <div className="mb-3 inline-block py-1 text-4xl leading-none anim-wiggle [animation-iteration-count:1]">
+        {emoji}
+      </div>
       <h1 className="text-[26px] font-bold leading-tight tracking-[-1px]">{title}</h1>
       <p className="mb-5 mt-1 text-sm text-muted">{sub}</p>
       {children}

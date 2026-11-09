@@ -12,7 +12,7 @@ import {
   type LocalDate,
 } from '@/lib/date'
 import { useMembers, usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
-import { isDueOn } from '@/lib/habits'
+import { currentStreak, isDueOn } from '@/lib/habits'
 import { useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
 import { motivationFor } from '@/lib/wellness'
 import { nextSlotAfter } from '@/lib/reminders'
@@ -28,7 +28,7 @@ import {
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { toast, useUI } from '@/store/ui'
-import { Avatar, Button, LinkButton, Panel, Ring, Skeleton } from '@/components/ui'
+import { Avatar, Button, LinkButton, Panel, ProgressBar, Skeleton } from '@/components/ui'
 import { EventRow, HabitRow, TaskRow } from '@/components/rows'
 
 export function Today() {
@@ -65,9 +65,6 @@ export function Today() {
             <span className="inline-block anim-wiggle [animation-iteration-count:2]">👋</span>
           </h1>
         </div>
-        <Ring value={progress} size={52}>
-          {total ? `${doneCount}/${total}` : '🌱'}
-        </Ring>
       </section>
 
       <section className="relative overflow-hidden rounded-[18px] bg-gradient-to-br from-[#5b8d6d] to-[#3f6e54] px-4 py-3 text-white">
@@ -76,6 +73,8 @@ export function Today() {
         </span>
         <p className="pr-10 text-[15px] font-semibold leading-snug">“{motivationFor(today)}”</p>
       </section>
+
+      <StatTiles today={today} meId={me?.id} tasks={tasks} habits={habits} />
 
       <HelperCard today={today} now={now} />
 
@@ -431,5 +430,81 @@ function FamilyStrip({ today }: { today: LocalDate }) {
       </span>
       <span className="text-muted">›</span>
     </button>
+  )
+}
+
+/** Today at a glance: to-dos, habits, and how the last 7 days went. Informative, never a score. */
+function StatTiles({
+  today,
+  meId,
+  tasks,
+  habits,
+}: {
+  today: LocalDate
+  meId?: string
+  tasks?: { done: boolean }[]
+  habits?: { done: boolean }[]
+}) {
+  const week = useLiveQuery(async () => {
+    const mine = (await db.habits.toArray()).filter(
+      (h) => h.status === 'active' && (!h.profileId || h.profileId === meId),
+    )
+    const from = addLocalDays(today, -6)
+    const entries = await db.habitEntries
+      .where('localDate')
+      .between(from, today, true, true)
+      .toArray()
+    const done = new Set(entries.map((e) => `${e.habitId}|${e.localDate}`))
+    let due = 0
+    let kept = 0
+    let best = 0
+    for (const h of mine) {
+      const started = toLocalDate(new Date(h.createdAt))
+      for (let i = 0; i < 7; i++) {
+        const d = addLocalDays(from, i)
+        if (compareLocal(d, started) < 0 || !isDueOn(h, d)) continue
+        due++
+        if (done.has(`${h.id}|${d}`)) kept++
+      }
+      const all = new Set(
+        (await db.habitEntries.where('habitId').equals(h.id).toArray()).map((e) => e.localDate),
+      )
+      best = Math.max(best, currentStreak(h, all, today))
+    }
+    return { pct: due ? Math.round((kept / due) * 100) : null, best }
+  }, [today, meId, habits?.filter((h) => h.done).length])
+
+  const tDone = tasks?.filter((t) => t.done).length ?? 0
+  const hDone = habits?.filter((h) => h.done).length ?? 0
+  return (
+    <section className="grid grid-cols-3 gap-2" aria-label="Today at a glance">
+      <Tile
+        value={tasks ? `${tDone}/${tasks.length}` : '–'}
+        label="To-dos done"
+        ratio={tasks?.length ? tDone / tasks.length : 0}
+      />
+      <Tile
+        value={habits ? `${hDone}/${habits.length}` : '–'}
+        label="Habits done"
+        ratio={habits?.length ? hDone / habits.length : 0}
+      />
+      <Tile
+        value={week?.pct == null ? '–' : `${week.pct}%`}
+        label={week?.best ? `This week · 🔥 ${week.best}` : 'This week'}
+        ratio={(week?.pct ?? 0) / 100}
+      />
+    </section>
+  )
+}
+
+function Tile({ value, label, ratio }: { value: string; label: string; ratio: number }) {
+  return (
+    <div className="rounded-[16px] border border-line bg-surface px-3 py-2.5">
+      <strong className="block text-[20px] leading-tight tracking-[-0.5px] tabular-nums">
+        {value}
+      </strong>
+      <span className="block truncate text-[11px] text-muted">{label}</span>
+      <ProgressBar className="mt-1.5" value={ratio} />
+    </div>
   )
 }
