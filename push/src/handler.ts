@@ -3,12 +3,15 @@ import type { Store } from './store'
 
 export const MAX_SLOTS = 600 // ~7 days of reminders
 export const HORIZON_MIN = 8 * 24 * 60
-export const STALE_MIN = 10 // don't deliver a reminder more than 10 minutes late
+export const STALE_MIN = 10
+export const TEST_DELAY_MS = 10_000 // don't deliver a reminder more than 10 minutes late
 const DEVICE_TTL_MS = 60 * 24 * 3600 * 1000 // forget devices not seen for 60 days
 
 export interface Config {
   allowedOrigin: string
   vapid: VapidKeys
+  /** delay before a test push (default 10 s) */
+  testDelayMs?: number
 }
 
 async function sha256(text: string): Promise<string> {
@@ -58,6 +61,7 @@ interface ScheduleBody {
  * HTTP API used by the app:
  *   POST   /schedule  { id, secret, subscription, slots: epochMinute[] }  → save device + replace its slots
  *   DELETE /schedule  { id, secret }                                      → forget device
+ *   POST   /test      { id, secret }                                      → one test push in ~10 s
  * The device secret (random, kept on the phone) stops anyone else changing or deleting a device.
  * Only push addresses and times are stored; never reminder text.
  */
@@ -66,12 +70,16 @@ export async function handleRequest(
   store: Store,
   cfg: Config,
   now = Date.now(),
+  /** keep work running after the response (Cloudflare's ctx.waitUntil) */
+  defer: (work: Promise<unknown>) => void = (w) => void w,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<Response> {
   const url = new URL(req.url)
   const h = cors(cfg, req.headers.get('Origin'))
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h })
   if (url.pathname === '/health') return json({ ok: true }, 200, h)
-  if (url.pathname !== '/schedule') return json({ error: 'Not found' }, 404, h)
+  if (url.pathname !== '/schedule' && url.pathname !== '/test')
+    return json({ error: 'Not found' }, 404, h)
   if (!originAllowed(cfg, req.headers.get('Origin')))
     return json({ error: 'Origin not allowed' }, 403, h)
 
@@ -90,6 +98,24 @@ export async function handleRequest(
   const secretHash = await sha256(secret)
   const existing = await store.getDevice(id)
   if (existing && existing.secretHash !== secretHash) return json({ error: 'Forbidden' }, 403, h)
+
+  if (url.pathname === '/test') {
+    if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405, h)
+    if (!existing) return json({ error: 'Turn on reminders first' }, 404, h)
+    // wait a few seconds so the person can lock the phone or switch apps
+    const delayMs = cfg.testDelayMs ?? TEST_DELAY_MS
+    defer(
+      new Promise((r) => setTimeout(r, delayMs)).then(() =>
+        sendPush(
+          { endpoint: existing.endpoint, keys: { p256dh: existing.p256dh, auth: existing.auth } },
+          { test: true, at: now },
+          cfg.vapid,
+          fetchImpl,
+        ),
+      ),
+    )
+    return json({ ok: true, inSeconds: delayMs / 1000 }, 202, h)
+  }
 
   if (req.method === 'DELETE') {
     if (existing) await store.deleteDevice(id)

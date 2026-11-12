@@ -19,8 +19,8 @@ const config = (env: Env): Config => ({
 })
 
 export default {
-  fetch(req: Request, env: Env) {
-    return handleRequest(req, new D1Store(env.DB), config(env))
+  fetch(req: Request, env: Env, ctx: ExecutionContext) {
+    return handleRequest(req, new D1Store(env.DB), config(env), Date.now(), (w) => ctx.waitUntil(w))
   },
   scheduled(_c: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(runCron(new D1Store(env.DB), config(env)))

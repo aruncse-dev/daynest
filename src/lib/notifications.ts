@@ -36,7 +36,7 @@ export async function showSystemNotification(opts: NotifyOptions): Promise<boole
     icon: '/pwa-192.png',
     badge: '/pwa-192.png',
     data: { url: opts.url ?? '/' },
-    requireInteraction: opts.requireInteraction ?? false,
+    ...alertOptions(!!opts.requireInteraction, !!opts.tag),
   }
   try {
     const reg = await navigator.serviceWorker?.getRegistration()
@@ -49,4 +49,20 @@ export async function showSystemNotification(opts: NotifyOptions): Promise<boole
   } catch {
     return false
   }
+}
+
+/**
+ * Make every reminder actually alert. Without `renotify`, a notification that reuses a tag
+ * (the same reminder firing again while the last one is still in the tray) replaces it silently.
+ * Android's own per-app notification settings still decide sound and pop-up banners.
+ */
+export function alertOptions(important: boolean, hasTag: boolean): NotificationOptions {
+  return {
+    requireInteraction: important,
+    silent: false,
+    // `renotify` is only valid together with a tag
+    ...(hasTag ? { renotify: true } : {}),
+    vibrate: important ? [300, 120, 300, 120, 500] : [200, 100, 200],
+    timestamp: Date.now(),
+  } as NotificationOptions
 }

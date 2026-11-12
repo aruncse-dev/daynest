@@ -125,3 +125,15 @@ export async function syncPush({
   await setSetting(HASH_KEY, hash)
   await setSetting(LAST_SYNC_KEY, new Date().toISOString())
 }
+
+/** Ask the push server to send this phone one test notification in about 10 seconds. */
+export async function sendTestPush(): Promise<number> {
+  const d = await device()
+  const res = await fetch(`${PUSH_URL}/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d),
+  })
+  if (!res.ok) throw new Error(`Push server said ${res.status}`)
+  return ((await res.json()) as { inSeconds?: number }).inSeconds ?? 10
+}

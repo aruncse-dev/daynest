@@ -175,4 +175,63 @@ describe('push worker', () => {
       (await handleRequest(req('POST', body, 'https://other.vercel.app'), store, cfg, NOW)).status,
     ).toBe(403)
   })
+
+  it('sends one test push to a registered device, and only with its secret', async () => {
+    const store = new MemoryStore()
+    const cfg = { ...(await config()), testDelayMs: 0 }
+    const secret = 'a'.repeat(40)
+    await handleRequest(
+      req('POST', { id: 'device-1234', secret, subscription: subscription(), slots: [] }),
+      store,
+      cfg,
+      NOW,
+    )
+    const sent: Promise<unknown>[] = []
+    const calls: string[] = []
+    const fakeFetch = (async (url: string) => {
+      calls.push(url)
+      return new Response(null, { status: 201 })
+    }) as unknown as typeof fetch
+    const testReq = (body: unknown) =>
+      new Request('https://push.daynest.example/test', {
+        method: 'POST',
+        headers: { Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    expect(
+      (
+        await handleRequest(
+          testReq({ id: 'device-1234', secret: 'b'.repeat(40) }),
+          store,
+          cfg,
+          NOW,
+          (w) => sent.push(w),
+          fakeFetch,
+        )
+      ).status,
+    ).toBe(403)
+    expect(
+      (
+        await handleRequest(
+          testReq({ id: 'device-9999', secret }),
+          store,
+          cfg,
+          NOW,
+          (w) => sent.push(w),
+          fakeFetch,
+        )
+      ).status,
+    ).toBe(404)
+    const ok = await handleRequest(
+      testReq({ id: 'device-1234', secret }),
+      store,
+      cfg,
+      NOW,
+      (w) => sent.push(w),
+      fakeFetch,
+    )
+    expect(ok.status).toBe(202)
+    await Promise.all(sent)
+    expect(calls).toEqual(['https://push.example.com/send/1'])
+  })
 })

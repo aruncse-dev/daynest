@@ -9,6 +9,7 @@ import { db } from './db/db'
 import { canCompleteFromReminder, completeLinked } from './db/links'
 import { remindersDueAt } from './lib/pushSchedule'
 import { syncPush } from './lib/push'
+import { alertOptions } from './lib/notifications'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>
@@ -60,7 +61,7 @@ async function onPush(atMs: number) {
       icon: '/pwa-192.png',
       badge: '/pwa-192.png',
       data: { url: '/', reminderId: r.id },
-      requireInteraction: r.priority === 'high',
+      ...alertOptions(r.priority === 'high', true),
       actions: [
         ...(canComplete ? [{ action: 'done', title: 'Mark done ✓' }] : []),
         { action: 'snooze', title: 'Snooze 10 min' },
@@ -72,14 +73,29 @@ async function onPush(atMs: number) {
 
 self.addEventListener('push', (event) => {
   let at = Date.now()
+  let test = false
   try {
-    const data = event.data?.json() as { at?: number } | undefined
+    const data = event.data?.json() as { at?: number; test?: boolean } | undefined
     if (typeof data?.at === 'number') at = data.at
+    test = data?.test === true
   } catch {
     /* empty or non-JSON push: treat as "now" */
   }
-  event.waitUntil(onPush(at))
+  event.waitUntil(test ? showTest() : onPush(at))
 })
+
+/** "Send test" from the app: always shown, so sound / banner / vibration can be checked. */
+function showTest() {
+  const options: ActionNotificationOptions = {
+    body: 'Reminders will look, sound and vibrate like this, even when DayNest is closed.',
+    tag: 'daynest-test',
+    icon: '/pwa-192.png',
+    badge: '/pwa-192.png',
+    data: { url: '/routines' },
+    ...alertOptions(false, true),
+  }
+  return self.registration.showNotification('🔔 DayNest test reminder', options)
+}
 
 // Tap a notification (or one of its buttons).
 self.addEventListener('notificationclick', (event) => {
