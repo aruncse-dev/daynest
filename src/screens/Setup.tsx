@@ -1,3 +1,5 @@
+import { CloudFlow } from '@/components/CloudCard'
+import { googleConfigured } from '@/lib/cloud/google'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
@@ -355,6 +357,7 @@ function StepShell({
 }
 
 function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
+  const [restore, setRestore] = useState(false)
   return (
     <div className="grid h-full place-items-center text-center">
       <div>
@@ -375,10 +378,16 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
           <Button variant="soft" onClick={onTour}>
             ▶️ Watch a 30-second tour
           </Button>
+          {googleConfigured() && (
+            <Button variant="ghost" onClick={() => setRestore(true)}>
+              ☁️ I have a family copy in Google
+            </Button>
+          )}
         </div>
         <p className="mx-auto mt-5 max-w-xs text-[11px] text-muted">
-          No account. Your data is saved only on this phone — remember to back it up from Settings.
+          No account needed. Your data is saved on this phone; back it up from Settings.
         </p>
+        {restore && <CloudFlow restore onClose={() => setRestore(false)} />}
       </div>
     </div>
   )

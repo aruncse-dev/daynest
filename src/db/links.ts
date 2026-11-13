@@ -40,7 +40,10 @@ async function titleFor(title: string, ids: string[]) {
 
 async function upsertLinked(
   link: ReminderLink,
-  { people, ...rest }: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days'> &
+  {
+    people,
+    ...rest
+  }: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days'> &
     Partial<Pick<Reminder, 'priority' | 'presetKey'>> & { people: string[] },
 ) {
   const existing = await getLinkedReminder(link.type, link.id)

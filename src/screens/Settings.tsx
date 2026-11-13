@@ -27,6 +27,7 @@ import {
   Sheet,
   Toggle,
 } from '@/components/ui'
+import { CloudCard } from '@/components/CloudCard'
 import { Tour } from '@/components/Tour'
 import { setPhoneFree } from '@/db/phoneFree'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
@@ -104,6 +105,8 @@ export function Settings() {
 
       <PhoneFreeGroup />
 
+      <CloudCard />
+
       <BackupGroup />
 
       <Group>
@@ -121,7 +124,10 @@ export function Settings() {
         <summary className="cursor-pointer">🔒 Privacy & storage</summary>
         <ul className="mt-2 grid gap-1.5 text-xs text-muted">
           <li>• The app loads from the web, but what you enter is saved only on this phone.</li>
-          <li>• No account, no server database, no ads, no tracking.</li>
+          <li>
+            • No DayNest account or server database, no ads, no tracking. The optional family copy
+            is encrypted on the phone and stored in your own Google Sheet.
+          </li>
           <li>
             • Browser storage isn't encrypted. Anyone using this phone's browser can open DayNest.
           </li>

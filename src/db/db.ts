@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
   BackupHistory,
+  Tombstone,
   CalendarEvent,
   Goal,
   Habit,
@@ -14,7 +15,26 @@ import type {
 } from './types'
 
 export const DB_NAME = 'daynest'
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
+
+export const DATA_TABLES = [
+  'profiles',
+  'tasks',
+  'taskOccurrences',
+  'habits',
+  'habitEntries',
+  'events',
+  'goals',
+  'reminders',
+  'wellnessSessions',
+  'settings',
+] as const
+
+export type DataTableName = (typeof DATA_TABLES)[number]
+
+/** Fires after the user changes data on this phone (used to schedule a cloud sync). */
+export const localChanges = new EventTarget()
+const notifyLocalChange = () => localChanges.dispatchEvent(new Event('change'))
 
 export class DayNestDB extends Dexie {
   profiles!: EntityTable<Profile, 'id'>
@@ -28,6 +48,9 @@ export class DayNestDB extends Dexie {
   wellnessSessions!: EntityTable<WellnessSession, 'id'>
   settings!: EntityTable<Setting, 'key'>
   backupHistory!: EntityTable<BackupHistory, 'id'>
+  tombstones!: EntityTable<Tombstone, 'id'>
+  /** true while applying changes that came from the cloud (they need no tombstone) */
+  applyingRemote = false
 
   constructor(name = DB_NAME) {
     super(name)
@@ -61,6 +84,30 @@ export class DayNestDB extends Dexie {
             .toCollection()
             .modify((row: Record<string, unknown>) => toPeopleList(row))
       })
+    // v3: remember deletions so they can sync between phones (pruned after syncing)
+    this.version(3).stores({ tombstones: 'id, deletedAt' })
+
+    for (const name of DATA_TABLES) {
+      // tell the cloud sync something changed (not for per-phone settings or synced-in data)
+      if (name !== 'settings') {
+        this.table(name).hook('creating', (_k, _o, tx) => {
+          if (!this.applyingRemote) tx.on('complete', notifyLocalChange)
+        })
+        this.table(name).hook('updating', (_m, _k, _o, tx) => {
+          if (!this.applyingRemote) tx.on('complete', notifyLocalChange)
+        })
+      }
+      this.table(name).hook('deleting', (key, _obj, tx) => {
+        if (this.applyingRemote) return
+        const deletedAt = new Date().toISOString()
+        const row = { id: `${name}:${String(key)}`, table: name, recordId: String(key), deletedAt }
+        // written after the delete commits, so callers needn't include this table
+        tx.on('complete', () => {
+          void this.tombstones.put(row).catch(() => undefined)
+          notifyLocalChange()
+        })
+      })
+    }
   }
 }
 
@@ -73,18 +120,3 @@ export function toPeopleList(row: Record<string, unknown>) {
 }
 
 export const db = new DayNestDB()
-
-export const DATA_TABLES = [
-  'profiles',
-  'tasks',
-  'taskOccurrences',
-  'habits',
-  'habitEntries',
-  'events',
-  'goals',
-  'reminders',
-  'wellnessSessions',
-  'settings',
-] as const
-
-export type DataTableName = (typeof DATA_TABLES)[number]

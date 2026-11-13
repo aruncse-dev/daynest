@@ -31,7 +31,7 @@ export type ValidationResult =
   | { ok: true; backup: BackupFile; summary: BackupSummary; warnings: string[] }
   | { ok: false; error: string }
 
-const KEY_FIELD: Record<DataTableName, string> = {
+export const KEY_FIELD: Record<DataTableName, string> = {
   profiles: 'id',
   tasks: 'id',
   taskOccurrences: 'id',
@@ -45,7 +45,11 @@ const KEY_FIELD: Record<DataTableName, string> = {
 }
 
 /** Settings that must never travel between devices (e.g. folder handles). */
-const LOCAL_ONLY_SETTINGS = new Set([
+export const LOCAL_ONLY_SETTINGS = new Set([
+  'cloudSheetId',
+  'cloudKeyCode',
+  'cloudLastSync',
+  'cloudError',
   'backupFolderHandle',
   'pushEnabled',
   'pushDevice',

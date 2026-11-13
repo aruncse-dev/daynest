@@ -8,6 +8,7 @@ import { usePrimaryProfile } from '@/lib/hooks'
 import { useUI } from '@/store/ui'
 import { Toasts } from './Toasts'
 import { NudgeHost } from './NudgeHost'
+import { CloudSyncButton } from '@/components/CloudCard'
 import { SheetHost } from '@/components/sheets/SheetHost'
 import { UpdatePrompt } from './UpdatePrompt'
 
@@ -30,14 +31,17 @@ export function AppShell() {
             <img src="/favicon.svg" alt="" className="size-9 rounded-xl shadow-sm" />
             daynest
           </NavLink>
-          <button
-            type="button"
-            onClick={() => navigate('/settings')}
-            aria-label="Settings and profile"
-            className="rounded-full ring-2 ring-transparent transition hover:ring-sage-line"
-          >
-            <Avatar avatar={me?.avatar ?? '🙂'} color={me?.color} size={38} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <CloudSyncButton />
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              aria-label="Settings and profile"
+              className="rounded-full ring-2 ring-transparent transition hover:ring-sage-line"
+            >
+              <Avatar avatar={me?.avatar ?? '🙂'} color={me?.color} size={38} />
+            </button>
+          </div>
         </header>
         <main id="main" key={pathname} className="animate-rise">
           <Outlet />

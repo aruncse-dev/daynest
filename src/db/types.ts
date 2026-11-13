@@ -81,12 +81,7 @@ export interface HabitEntry {
 }
 
 export type EventType =
-  | 'event'
-  | 'important'
-  | 'birthday'
-  | 'anniversary'
-  | 'school'
-  | 'appointment'
+  'event' | 'important' | 'birthday' | 'anniversary' | 'school' | 'appointment'
 
 export interface CalendarEvent {
   id: string
@@ -192,4 +187,13 @@ export interface BackupHistory {
   destination: 'download' | 'folder'
   status: 'success' | 'error'
   errorMessage?: string
+}
+
+/** A record deleted on this phone, so the deletion can sync to the family's other phones. */
+export interface Tombstone {
+  /** `${table}:${id}` */
+  id: string
+  table: string
+  recordId: string
+  deletedAt: ISODate
 }

@@ -75,6 +75,22 @@ Out of the box, reminders appear while DayNest is open or running in the backgro
 
 The server only stores your phone's push address and the minutes to wake it; never reminder text. Notifications have **Mark done ✓** and **Snooze 10 min** buttons.
 
+### Family copy in your Google Sheet (optional, free, no server) ☁️
+
+Settings → **Family copy** signs in with Google straight from the phone and keeps an encrypted copy in a Sheet called "DayNest family (encrypted)" in your own Drive. On a new phone, tap **I have a family copy in Google** on the welcome screen and enter the family key code.
+
+- Encrypted on the phone before upload (AES-GCM; key from a 20-character family key code). Google sees only gibberish; there is no DayNest server.
+- DayNest asks only for `drive.file`: it can see the files it creates, not the rest of your Drive.
+- Nobody can reset the key code. Keep it written down; it's shown again in Settings on a signed-in phone.
+
+One-time setup for the app owner (free, no card):
+
+1. [Google Cloud console](https://console.cloud.google.com/) → new project "DayNest".
+2. **APIs & Services → Library**: enable **Google Sheets API** and **Google Drive API**.
+3. **Google Auth Platform** (OAuth consent screen): External, app name DayNest, your email. Under **Data access** add the scope `.../auth/drive.file`. Under **Audience** choose **Publish app** (only a non-sensitive scope, so no review is needed).
+4. **Clients → Create client → Web application**. Authorized JavaScript origin: `https://daynestapp.vercel.app`. Copy the **Client ID**.
+5. Vercel → Settings → Environment Variables: `VITE_GOOGLE_CLIENT_ID` = that Client ID (public by design), then redeploy.
+
 ## Your data
 
 - Saved only in this phone's browser storage. Clearing browser data erases it, so use **Settings → Backup** (JSON export/import with preview, merge or replace, all-or-nothing; optional daily folder snapshots on Chrome/Android).
