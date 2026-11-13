@@ -116,11 +116,14 @@ export function HabitRow({
   done,
   date = todayLocal(),
   streak,
+  locked,
 }: {
   habit: Habit
   done: boolean
   date?: LocalDate
   streak?: number
+  /** e.g. a future day: shown, but can't be ticked yet */
+  locked?: boolean
 }) {
   const bell = useReminderTimes('habit', habit.id)
   return (
@@ -149,6 +152,7 @@ export function HabitRow({
       <CheckBox
         size="lg"
         checked={done}
+        disabled={locked}
         label={done ? `Undo ${habit.title}` : `Complete ${habit.title}`}
         onChange={async () => {
           const nowDone = await toggleHabit(habit.id, date)

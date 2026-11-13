@@ -10,6 +10,8 @@ import { canCompleteFromReminder, completeLinked } from './db/links'
 import { remindersDueAt } from './lib/pushSchedule'
 import { syncPush } from './lib/push'
 import { alertOptions } from './lib/notifications'
+import { richReminder } from './lib/notifyRich'
+import { drawReminderCard } from './lib/notifyCard'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>
@@ -31,6 +33,7 @@ self.addEventListener('message', (event) => {
 type ActionNotificationOptions = NotificationOptions & {
   actions?: { action: string; title: string }[]
   requireInteraction?: boolean
+  image?: string
 }
 
 async function onPush(atMs: number) {
@@ -55,12 +58,14 @@ async function onPush(atMs: number) {
       snoozedUntil: null,
     })
     const canComplete = canCompleteFromReminder(r)
+    const rich = await richReminder(r, new Date(atMs))
     const options: ActionNotificationOptions = {
       body: r.message,
       tag: `reminder-${r.id}`,
       icon: '/pwa-192.png',
       badge: '/pwa-192.png',
-      data: { url: '/', reminderId: r.id },
+      ...(rich.image ? { image: rich.image } : {}),
+      data: { url: rich.url, reminderId: r.id },
       ...alertOptions(r.priority === 'high', true),
       actions: [
         ...(canComplete ? [{ action: 'done', title: 'Mark done ✓' }] : []),
@@ -85,13 +90,20 @@ self.addEventListener('push', (event) => {
 })
 
 /** "Send test" from the app: always shown, so sound / banner / vibration can be checked. */
-function showTest() {
+async function showTest() {
+  const image = await drawReminderCard({
+    emoji: '🔔',
+    title: 'Test reminder',
+    line: 'Tap to open the reminder card',
+    theme: 'day',
+  })
   const options: ActionNotificationOptions = {
     body: 'Reminders will look, sound and vibrate like this, even when DayNest is closed.',
     tag: 'daynest-test',
     icon: '/pwa-192.png',
     badge: '/pwa-192.png',
-    data: { url: '/routines' },
+    ...(image ? { image } : {}),
+    data: { url: '/?reminder=test' },
     ...alertOptions(false, true),
   }
   return self.registration.showNotification('🔔 DayNest test reminder', options)
@@ -117,11 +129,14 @@ self.addEventListener('notificationclick', (event) => {
         await syncPush({ getReg: async () => self.registration }).catch(() => undefined)
         return
       }
+      // Tapping the notification itself opens DayNest on that reminder's full card
       const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      const reminderId = new URL(url, self.location.origin).searchParams.get('reminder')
       for (const client of all) {
         if ('focus' in client) {
           await client.focus()
-          if ('navigate' in client && url !== '/')
+          if (reminderId) client.postMessage({ type: 'open-reminder', id: reminderId })
+          else if ('navigate' in client && url !== '/')
             await (client as WindowClient).navigate(url).catch(() => undefined)
           return
         }

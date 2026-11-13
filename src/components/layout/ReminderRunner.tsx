@@ -7,6 +7,7 @@ import { chime, vibrate } from '@/lib/sound'
 import { useUI } from '@/store/ui'
 import { getSetting } from '@/db/actions'
 import { linkedStillDue } from '@/db/links'
+import { richReminder } from '@/lib/notifyRich'
 
 const TICK_MS = 20_000
 
@@ -46,12 +47,13 @@ export function ReminderRunner() {
             document.visibilityState !== 'visible' ||
             (await getSetting('notifyWhenOpen', false))
           ) {
+            const rich = await richReminder(r, now)
             await showSystemNotification({
               title: `${r.emoji} ${r.title}`,
               body: r.message,
               tag: `reminder-${r.id}`,
-              url: '/',
               requireInteraction: high,
+              ...rich,
             })
           }
         }

@@ -341,11 +341,13 @@ export function CheckBox({
   onChange,
   label,
   size = 'md',
+  disabled,
 }: {
   checked: boolean
   onChange: () => void
   label: string
   size?: 'md' | 'lg'
+  disabled?: boolean
 }) {
   const [burst, setBurst] = useState(0)
   return (
@@ -354,11 +356,12 @@ export function CheckBox({
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => {
         if (!checked) setBurst((b) => b + 1)
         onChange()
       }}
-      className="relative grid size-11 shrink-0 place-items-center -m-2.5"
+      className="relative grid size-11 shrink-0 place-items-center -m-2.5 disabled:opacity-40"
     >
       <span
         key={burst}

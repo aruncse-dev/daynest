@@ -21,6 +21,8 @@ export interface NotifyOptions {
   url?: string
   /** keep on screen until the user acts (supported on Chromium desktop/Android) */
   requireInteraction?: boolean
+  /** big picture (data: URL drawn on the device) */
+  image?: string
 }
 
 /**
@@ -36,6 +38,7 @@ export async function showSystemNotification(opts: NotifyOptions): Promise<boole
     icon: '/pwa-192.png',
     badge: '/pwa-192.png',
     data: { url: opts.url ?? '/' },
+    ...(opts.image ? { image: opts.image } : {}),
     ...alertOptions(!!opts.requireInteraction, !!opts.tag),
   }
   try {

@@ -155,6 +155,10 @@ function TestAndHelp() {
             daynestapp.vercel.app.
           </p>
           <p>
+            Swipe a reminder down to see its picture card. Tap it to open DayNest on the big
+            reminder card with Done and Snooze.
+          </p>
+          <p>
             Full-screen alerts (like an alarm clock) aren't possible for web apps. For must-not-miss
             moments, also set a phone alarm.
           </p>

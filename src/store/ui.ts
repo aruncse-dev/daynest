@@ -30,6 +30,8 @@ export interface ToastItem {
 export interface ActiveReminder {
   reminder: Reminder
   firedAt: number
+  /** opened from a notification: always shown as the big card */
+  full?: boolean
 }
 
 interface UIState {
@@ -42,7 +44,7 @@ interface UIState {
   profileFilter: string // 'all' | profile id
   setProfileFilter: (id: string) => void
   activeReminders: ActiveReminder[]
-  pushReminder: (r: Reminder) => void
+  pushReminder: (r: Reminder, full?: boolean) => void
   dismissReminder: (id: string) => void
 }
 
@@ -66,11 +68,11 @@ export const useUI = create<UIState>((set) => ({
   profileFilter: 'all',
   setProfileFilter: (profileFilter) => set({ profileFilter }),
   activeReminders: [],
-  pushReminder: (reminder) =>
+  pushReminder: (reminder, full) =>
     set((s) => ({
       activeReminders: [
         ...s.activeReminders.filter((a) => a.reminder.id !== reminder.id),
-        { reminder, firedAt: Date.now() },
+        { reminder, firedAt: Date.now(), full },
       ].slice(-3),
     })),
   dismissReminder: (id) =>

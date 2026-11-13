@@ -112,7 +112,7 @@ function useActions(r: Reminder) {
   }
 }
 
-function HighPriorityNudge({ reminder: r }: { reminder: Reminder }) {
+function HighPriorityNudge({ reminder: r, opened }: { reminder: Reminder; opened?: boolean }) {
   const style = nudgeStyle(r)
   const line = useMemo(() => smileLine(style.smile), [style.smile])
   const { done, snooze } = useActions(r)
@@ -142,7 +142,7 @@ function HighPriorityNudge({ reminder: r }: { reminder: Reminder }) {
             {r.emoji}
           </div>
           <div className="text-[11px] font-bold uppercase tracking-widest opacity-60">
-            Important · now
+            {r.priority === 'high' ? 'Important · now' : opened ? 'Reminder' : 'Now'}
           </div>
           <h2 className="mt-1 text-2xl font-bold tracking-tight">{r.title}</h2>
           <p className="mt-2 text-sm opacity-80">{r.message}</p>
@@ -240,11 +240,51 @@ function GentleNudge({ reminder: r }: { reminder: Reminder }) {
   )
 }
 
+const TEST_REMINDER: Reminder = {
+  id: 'test',
+  title: 'Test reminder',
+  message: 'This is how a reminder opens when you tap its notification.',
+  emoji: '🔔',
+  kind: 'times',
+  times: [],
+  days: [],
+  enabled: true,
+  priority: 'normal',
+  lastFiredSlot: null,
+  createdAt: '',
+  updatedAt: '',
+}
+
+/** Tapping a notification opens DayNest (or brings it forward) on that reminder's big card. */
+function useOpenFromNotification() {
+  useEffect(() => {
+    const open = async (id: string) => {
+      const r = id === 'test' ? TEST_REMINDER : await db.reminders.get(id)
+      if (r) useUI.getState().pushReminder(r, true)
+    }
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('reminder')
+    if (id) {
+      params.delete('reminder')
+      const q = params.toString()
+      window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : ''))
+      void open(id)
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'open-reminder' && typeof e.data.id === 'string') void open(e.data.id)
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker?.removeEventListener('message', onMessage)
+  }, [])
+}
+
 /** Shows nudges when they fire while DayNest is open. */
 export function NudgeHost() {
+  useOpenFromNotification()
   const active = useUI((s) => s.activeReminders)
-  const high = active.filter((a) => a.reminder.priority === 'high')
-  const gentle = active.filter((a) => a.reminder.priority !== 'high')
+  const isBig = (a: (typeof active)[number]) => a.reminder.priority === 'high' || !!a.full
+  const high = active.filter(isBig)
+  const gentle = active.filter((a) => !isBig(a))
   return (
     <>
       {gentle.length > 0 && (
@@ -261,6 +301,7 @@ export function NudgeHost() {
         <HighPriorityNudge
           key={high[high.length - 1].reminder.id}
           reminder={high[high.length - 1].reminder}
+          opened={high[high.length - 1].full}
         />
       )}
     </>

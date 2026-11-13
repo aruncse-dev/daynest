@@ -1,3 +1,4 @@
+import { bestStreak, computeDayStats } from './dayStats'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import type { Habit, Task } from '@/db/types'
@@ -81,4 +82,25 @@ export function useHabitsForDay(date: LocalDate, profileId?: string) {
 
 export function useEventsBetween(from: LocalDate, to: LocalDate) {
   return useLiveQuery(async () => eventsBetween(await db.events.toArray(), from, to), [from, to])
+}
+
+/** Per-date done/planned counts for the given dates (see `computeDayStats`). */
+export function useDayStats(dates: LocalDate[], today: LocalDate, meId?: string) {
+  return useLiveQuery(async () => {
+    const [tasks, occurrences, habits, entries] = await Promise.all([
+      db.tasks.toArray(),
+      db.taskOccurrences
+        .where('localDate')
+        .between(dates[0], dates[dates.length - 1], true, true)
+        .toArray(),
+      db.habits.toArray(),
+      db.habitEntries.toArray(),
+    ])
+    const data = { tasks, occurrences, habits, entries }
+    const mine = (p?: string | null) => !p || p === meId
+    return {
+      days: computeDayStats(data, dates, today, mine),
+      streak: bestStreak(data, today, mine),
+    }
+  }, [dates.join(), today, meId])
 }

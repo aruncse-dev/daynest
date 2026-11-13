@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import { setSetting, toggleHabit } from '@/db/actions'
@@ -10,10 +12,19 @@ import {
   nowIso,
   toLocalDate,
   type LocalDate,
+  weekOf,
 } from '@/lib/date'
 import { useMembers, usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
-import { currentStreak, isDueOn } from '@/lib/habits'
-import { useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
+import { isDueOn } from '@/lib/habits'
+import { useDayStats, useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
+import {
+  dayMessage,
+  habitsKept,
+  statDone,
+  statRatio,
+  statTotal,
+  type DayStat,
+} from '@/lib/dayStats'
 import { motivationFor } from '@/lib/wellness'
 import { nextSlotAfter } from '@/lib/reminders'
 import { exportToDownload } from '@/lib/backup'
@@ -28,7 +39,7 @@ import {
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { toast, useUI } from '@/store/ui'
-import { Avatar, Button, LinkButton, Panel, ProgressBar, Skeleton } from '@/components/ui'
+import { Avatar, Button, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
 import { EventRow, HabitRow, TaskRow } from '@/components/rows'
 
 export function Today() {
@@ -36,14 +47,23 @@ export function Today() {
   const now = useNow()
   const me = usePrimaryProfile()
   const openSheet = useUI((s) => s.openSheet)
+  const [picked, setPicked] = useState<LocalDate | null>(null)
+  // a picked day resets once the date rolls over
+  const day = picked && picked !== today ? picked : today
+  const isToday = day === today
+  const isFuture = compareLocal(day, today) > 0
+  const [weekAnchor, setWeekAnchor] = useState<LocalDate | null>(null)
+  const week = weekOf(weekAnchor ?? day)
+
   // Today is about you; family members' items live on the Family tab
   const mine = (pid?: string | null) => !pid || pid === me?.id
-  const tasks = useDayTasks(today, { includeOverdue: true })?.filter((t) => mine(t.task.profileId))
-  const habits = useHabitsForDay(today)?.filter((h) => mine(h.habit.profileId))
-  const doneCount =
-    (tasks?.filter((t) => t.done).length ?? 0) + (habits?.filter((h) => h.done).length ?? 0)
+  const tasks = useDayTasks(day, { includeOverdue: isToday })?.filter((t) => mine(t.task.profileId))
+  const habits = useHabitsForDay(day)
+    ?.filter((h) => mine(h.habit.profileId))
+    .filter((h) => compareLocal(day, toLocalDate(new Date(h.habit.createdAt))) >= 0)
+  const stats = useDayStats(week, today, me?.id)
+  const dayStat = useDayStats([day], today, me?.id)?.days[0]
   const total = (tasks?.length ?? 0) + (habits?.length ?? 0)
-  const progress = total ? doneCount / total : 0
 
   const nextNudge = useLiveQuery(async () => {
     const rs = await db.reminders.filter((r) => r.enabled).toArray()
@@ -53,9 +73,14 @@ export function Today() {
       .sort((a, b) => a.at.getTime() - b.at.getTime())[0]
   }, [now.getTime()])
 
+  const pick = (d: LocalDate) => {
+    setPicked(d === today ? null : d)
+    setWeekAnchor(null)
+  }
+
   return (
     <div className="grid gap-3">
-      <section className="flex items-center gap-3">
+      <section className="flex items-end gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted">
             {formatLocal(today, 'EEEE, d MMMM')}
@@ -67,34 +92,57 @@ export function Today() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden rounded-[18px] bg-gradient-to-br from-[#5b8d6d] to-[#3f6e54] px-4 py-3 text-white">
-        <span aria-hidden className="absolute -right-1 -top-2 text-4xl opacity-90 anim-sway">
-          ☀️
-        </span>
-        <p className="pr-10 text-[15px] font-semibold leading-snug">“{motivationFor(today)}”</p>
-      </section>
+      <DayHero
+        stat={dayStat}
+        today={today}
+        streak={stats?.streak ?? 0}
+        quote={isToday ? motivationFor(today) : null}
+      />
 
-      <StatTiles today={today} meId={me?.id} tasks={tasks} habits={habits} />
+      <WeekStrip
+        week={week}
+        today={today}
+        selected={day}
+        stats={stats?.days}
+        onPick={pick}
+        onShift={(n) => setWeekAnchor(addLocalDays(week[0], n * 7))}
+      />
 
-      <HelperCard today={today} now={now} />
+      {isToday && <HelperCard today={today} now={now} />}
 
       <Panel>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-[13px] font-bold">
+            {isToday ? 'Today’s list' : formatLocal(day, 'EEEE, d MMM')}
+          </h2>
+          {isToday ? (
+            <LinkButton onClick={() => openSheet({ type: 'quickAdd' })}>+ Add</LinkButton>
+          ) : (
+            <LinkButton onClick={() => pick(today)}>Back to today</LinkButton>
+          )}
+        </div>
         {!tasks || !habits ? (
           <Skeleton />
         ) : total === 0 ? (
           <div className="py-4 text-center">
-            <div className="text-3xl">🌤️</div>
-            <div className="mt-1 text-sm font-bold">A clear day</div>
-            <div className="text-xs text-muted">
-              Add one or two things that would make today feel good.
+            <div className="text-3xl">{isToday ? '🌤️' : isFuture ? '🗓️' : '🍃'}</div>
+            <div className="mt-1 text-sm font-bold">
+              {isToday ? 'A clear day' : isFuture ? 'Nothing planned yet' : 'Nothing was planned'}
             </div>
-            <Button size="sm" className="mt-3" onClick={() => openSheet({ type: 'quickAdd' })}>
-              + Add a to-do
-            </Button>
+            {isToday && (
+              <>
+                <div className="text-xs text-muted">
+                  Add one or two things that would make today feel good.
+                </div>
+                <Button size="sm" className="mt-3" onClick={() => openSheet({ type: 'quickAdd' })}>
+                  + Add a to-do
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <>
-            {tasks.length > 0 && <SectionLabel>To-do</SectionLabel>}
+            {tasks.length > 0 && <SectionLabel>To-dos</SectionLabel>}
             {tasks.map((t) => (
               <TaskRow key={t.task.id} item={t} />
             ))}
@@ -103,19 +151,25 @@ export function Today() {
             )}
             <div className="grid gap-2.5">
               {habits.map((h) => (
-                <HabitRow key={h.habit.id} habit={h.habit} done={h.done} date={today} />
+                <HabitRow
+                  key={h.habit.id}
+                  habit={h.habit}
+                  done={h.done}
+                  date={day}
+                  locked={isFuture}
+                />
               ))}
             </div>
-            {progress === 1 && (
-              <p className="mt-3 text-center text-sm font-semibold text-sage-ink">
-                All done — wonderful! 🎉
+            {!isToday && !isFuture && (
+              <p className="mt-3 text-[11px] text-muted">
+                Forgot to tick something? You can still mark it for this day.
               </p>
             )}
           </>
         )}
       </Panel>
 
-      <ComingUp today={today} nudge={nextNudge} />
+      {isToday && <ComingUp today={today} nudge={nextNudge} />}
       <FamilyStrip today={today} />
     </div>
   )
@@ -447,78 +501,234 @@ function FamilyStrip({ today }: { today: LocalDate }) {
   )
 }
 
-/** Today at a glance: to-dos, habits, and how the last 7 days went. Informative, never a score. */
-function StatTiles({
-  today,
-  meId,
-  tasks,
-  habits,
+/** A progress ring: one hue, light track → filled arc. */
+function Ring({
+  value,
+  size,
+  stroke,
+  track,
+  color,
+  children,
 }: {
-  today: LocalDate
-  meId?: string
-  tasks?: { done: boolean }[]
-  habits?: { done: boolean }[]
+  value: number | null
+  size: number
+  stroke: number
+  track: string
+  color: string
+  children?: React.ReactNode
 }) {
-  const week = useLiveQuery(async () => {
-    const mine = (await db.habits.toArray()).filter(
-      (h) => h.status === 'active' && (!h.profileId || h.profileId === meId),
-    )
-    const from = addLocalDays(today, -6)
-    const entries = await db.habitEntries
-      .where('localDate')
-      .between(from, today, true, true)
-      .toArray()
-    const done = new Set(entries.map((e) => `${e.habitId}|${e.localDate}`))
-    let due = 0
-    let kept = 0
-    let best = 0
-    for (const h of mine) {
-      const started = toLocalDate(new Date(h.createdAt))
-      for (let i = 0; i < 7; i++) {
-        const d = addLocalDays(from, i)
-        if (compareLocal(d, started) < 0 || !isDueOn(h, d)) continue
-        due++
-        if (done.has(`${h.id}|${d}`)) kept++
-      }
-      const all = new Set(
-        (await db.habitEntries.where('habitId').equals(h.id).toArray()).map((e) => e.localDate),
-      )
-      best = Math.max(best, currentStreak(h, all, today))
-    }
-    return { pct: due ? Math.round((kept / due) * 100) : null, best }
-  }, [today, meId, habits?.filter((h) => h.done).length])
-
-  const tDone = tasks?.filter((t) => t.done).length ?? 0
-  const hDone = habits?.filter((h) => h.done).length ?? 0
+  const r = (size - stroke) / 2
+  const c = 2 * Math.PI * r
+  const v = value == null ? 0 : Math.max(0, Math.min(1, value))
   return (
-    <section className="grid grid-cols-3 gap-2" aria-label="Today at a glance">
-      <Tile
-        value={tasks ? `${tDone}/${tasks.length}` : '–'}
-        label="To-dos done"
-        ratio={tasks?.length ? tDone / tasks.length : 0}
-      />
-      <Tile
-        value={habits ? `${hDone}/${habits.length}` : '–'}
-        label="Habits done"
-        ratio={habits?.length ? hDone / habits.length : 0}
-      />
-      <Tile
-        value={week?.pct == null ? '–' : `${week.pct}%`}
-        label={week?.best ? `This week · 🔥 ${week.best}` : 'This week'}
-        ratio={(week?.pct ?? 0) / 100}
-      />
+    <span
+      className="relative grid shrink-0 place-items-center"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
+        {v > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={c}
+            strokeDashoffset={c * (1 - v)}
+            className="transition-[stroke-dashoffset] duration-700 ease-out"
+          />
+        )}
+      </svg>
+      <span className="relative">{children}</span>
+    </span>
+  )
+}
+
+/** The selected day at a glance: one ring, one sentence, three small facts. */
+function DayHero({
+  stat,
+  today,
+  streak,
+  quote,
+}: {
+  stat?: DayStat
+  today: LocalDate
+  streak: number
+  quote: string | null
+}) {
+  const ratio = stat ? statRatio(stat) : null
+  const label = !stat
+    ? ''
+    : stat.date === today
+      ? 'Today'
+      : stat.date === addLocalDays(today, -1)
+        ? 'Yesterday'
+        : stat.date === addLocalDays(today, 1)
+          ? 'Tomorrow'
+          : formatLocal(stat.date, 'EEE d MMM')
+  return (
+    <section
+      aria-label="Day summary"
+      className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#5b8d6d] to-[#3f6e54] p-4 text-white shadow-[0_10px_30px_-18px_rgba(40,80,55,.8)]"
+    >
+      <span aria-hidden className="absolute -right-3 -top-4 text-[64px] opacity-15">
+        🌿
+      </span>
+      <div className="relative flex items-center gap-4">
+        <Ring value={ratio} size={86} stroke={9} track="rgba(255,255,255,.22)" color="#fff">
+          <span className="block text-center">
+            <b
+              className={cx(
+                'block leading-none tabular-nums',
+                ratio === 1 ? 'text-[19px]' : 'text-[22px]',
+              )}
+            >
+              {ratio == null ? '–' : `${Math.round(ratio * 100)}%`}
+            </b>
+          </span>
+        </Ring>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">{label}</div>
+          <div className="text-[21px] font-bold leading-tight tracking-[-0.4px] tabular-nums">
+            {stat ? `${statDone(stat)} of ${statTotal(stat)} done` : '…'}
+          </div>
+          <div className="mt-0.5 text-[12.5px] opacity-90">{stat && dayMessage(stat, today)}</div>
+        </div>
+      </div>
+      <div className="relative mt-3 grid grid-cols-3 gap-2 text-center">
+        <Fact value={stat?.tasksDue ? `${stat.tasksDone}/${stat.tasksDue}` : '–'} label="To-dos" />
+        <Fact
+          value={stat?.habitsDue ? `${stat.habitsDone}/${stat.habitsDue}` : '–'}
+          label="Habits"
+        />
+        <Fact
+          value={streak ? `🔥 ${streak}` : '–'}
+          label={streak === 1 ? 'Day streak' : 'Best streak'}
+        />
+      </div>
+      {quote && (
+        <p className="relative mt-3 border-t border-white/20 pt-2.5 text-[12.5px] italic leading-snug opacity-90">
+          “{quote}”
+        </p>
+      )}
     </section>
   )
 }
 
-function Tile({ value, label, ratio }: { value: string; label: string; ratio: number }) {
+function Fact({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-[16px] border border-line bg-surface px-3 py-2.5">
-      <strong className="block text-[20px] leading-tight tracking-[-0.5px] tabular-nums">
-        {value}
-      </strong>
-      <span className="block truncate text-[11px] text-muted">{label}</span>
-      <ProgressBar className="mt-1.5" value={ratio} />
+    <div className="rounded-xl bg-white/15 px-2 py-1.5">
+      <b className="block text-[15px] leading-tight tabular-nums">{value}</b>
+      <span className="block text-[10.5px] font-semibold uppercase tracking-wide opacity-80">
+        {label}
+      </span>
     </div>
+  )
+}
+
+/** Mon–Sun with a small ring per day. Tap a day to see its list and numbers. */
+function WeekStrip({
+  week,
+  today,
+  selected,
+  stats,
+  onPick,
+  onShift,
+}: {
+  week: LocalDate[]
+  today: LocalDate
+  selected: LocalDate
+  stats?: DayStat[]
+  onPick: (d: LocalDate) => void
+  onShift: (n: number) => void
+}) {
+  const kept = stats ? habitsKept(stats, today) : null
+  const thisWeek = week.includes(today)
+  const title = thisWeek
+    ? 'This week'
+    : `${formatLocal(week[0], 'd MMM')} – ${formatLocal(week[6], 'd MMM')}`
+  return (
+    <Panel className="!px-2.5 !pb-2.5 !pt-2">
+      <div className="mb-1 flex items-center gap-1 px-1">
+        <button
+          type="button"
+          aria-label="Previous week"
+          onClick={() => onShift(-1)}
+          className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface2"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="min-w-0 flex-1 text-center">
+          <div className="text-[13px] font-bold">{title}</div>
+          <div className="text-[11px] text-muted">
+            {kept == null ? 'Habits kept: –' : `Habits kept: ${Math.round(kept * 100)}%`}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="Next week"
+          onClick={() => onShift(1)}
+          className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface2"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {week.map((d, i) => {
+          const s = stats?.[i]
+          const ratio = s ? statRatio(s) : null
+          const future = compareLocal(d, today) > 0
+          const isSel = d === selected
+          const isToday = d === today
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onPick(d)}
+              aria-pressed={isSel}
+              aria-label={`${formatLocal(d, 'EEEE d MMMM')}${
+                s ? `: ${statDone(s)} of ${statTotal(s)} done` : ''
+              }`}
+              className={cx(
+                'grid justify-items-center gap-1 rounded-[14px] py-1.5 transition',
+                isSel ? 'bg-sage-soft ring-1 ring-sage-line' : 'hover:bg-surface2',
+              )}
+            >
+              <span
+                className={cx(
+                  'text-[10.5px] font-bold uppercase',
+                  isToday ? 'text-sage-ink' : 'text-muted',
+                )}
+              >
+                {formatLocal(d, 'EEEEE')}
+              </span>
+              <Ring
+                value={future ? null : ratio}
+                size={34}
+                stroke={3.5}
+                track="var(--line)"
+                color="var(--green)"
+              >
+                <span
+                  className={cx(
+                    'text-[12.5px] tabular-nums',
+                    isToday ? 'font-extrabold text-sage-ink' : 'font-semibold',
+                    future && 'text-muted',
+                  )}
+                >
+                  {formatLocal(d, 'd')}
+                </span>
+              </Ring>
+              <span aria-hidden className="h-1.5 text-[9px] leading-none text-sage-ink">
+                {s && ratio === 1 && !future ? '✓' : ''}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </Panel>
   )
 }
