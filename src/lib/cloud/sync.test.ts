@@ -12,6 +12,7 @@ import {
   newKeyCode,
   newSalt,
   normalizeKeyCode,
+  rowKey,
 } from './crypto'
 import { MemoryStore } from './store'
 import { syncOnce } from './sync'
@@ -95,7 +96,7 @@ describe('sync between two phones through one Sheet', () => {
     await a.settings.put({ key: 'theme', value: 'dark', updatedAt: now() }) // per phone
     await a.settings.put({ key: 'customEmojis', value: ['🦚'], updatedAt: now() }) // shared
 
-    expect(await syncOnce(a, sheet, keys)).toEqual({ pulled: 0, pushed: 3 })
+    expect(await syncOnce(a, sheet, keys)).toEqual({ pulled: 0, pushed: 3, newer: 0 })
     // nothing readable in the Sheet
     expect(JSON.stringify(sheet.rows)).not.toMatch(/school|water|mia|tasks/i)
 
@@ -116,7 +117,7 @@ describe('sync between two phones through one Sheet', () => {
     expect(await b.reminders.get('r1')).toBeUndefined()
 
     // nothing left to do once both agree
-    expect(await syncOnce(a, sheet, keys)).toEqual({ pulled: 0, pushed: 0 })
+    expect(await syncOnce(a, sheet, keys)).toEqual({ pulled: 0, pushed: 0, newer: 0 })
   })
 
   it('a habit ticked on both phones the same day ends as one check-in', async () => {
@@ -165,5 +166,54 @@ describe('sync between two phones through one Sheet', () => {
     expect(JSON.stringify(sheet.rows.slice(0, 1))).toBe(
       JSON.stringify(JSON.parse(before).slice(0, 1)),
     )
+  })
+
+  it('upgrades entries from an older DayNest and leaves newer ones untouched', async () => {
+    const keys = await deriveKeys(newKeyCode(), newSalt())
+    const sheet = new MemoryStore()
+    const t = now()
+    // written by an older app: data v1, one person per to-do
+    sheet.rows.push({
+      key: await rowKey(keys, 'tasks', 'old'),
+      updatedAt: t,
+      deleted: false,
+      payload: await encryptJson(keys, {
+        t: 'tasks',
+        id: 'old',
+        s: 1,
+        r: { id: 'old', title: 'Old to-do', profileId: 'mia', status: 'open', updatedAt: t },
+      }),
+    })
+    // written by a future app (v99): a shape this phone doesn't know
+    const futureKey = await rowKey(keys, 'tasks', 'future')
+    const futurePayload = await encryptJson(keys, {
+      t: 'tasks',
+      id: 'future',
+      s: 99,
+      r: { id: 'future', title: 'From the future', people: { new: 'shape' }, updatedAt: t },
+    })
+    sheet.rows.push({ key: futureKey, updatedAt: t, deleted: false, payload: futurePayload })
+
+    const a = await phone('phone-g')
+    // this phone also has an (older) local copy of the future record and edits it later
+    await a.tasks.put({
+      id: 'future',
+      title: 'Local stale copy',
+      priority: 'normal',
+      category: 'Home',
+      status: 'open',
+      createdAt: t,
+      updatedAt: later(5000),
+    })
+    const r = await syncOnce(a, sheet, keys)
+
+    expect((await a.tasks.get('old'))?.profileIds).toEqual(['mia'])
+    expect((await a.tasks.get('old')) as unknown as { profileId?: string }).not.toHaveProperty(
+      'profileId',
+    )
+    expect(r.newer).toBe(1)
+    // the newer entry was neither imported nor overwritten
+    expect((await a.tasks.get('future'))?.title).toBe('Local stale copy')
+    expect(sheet.rows.find((x) => x.key === futureKey)?.payload).toBe(futurePayload)
   })
 })

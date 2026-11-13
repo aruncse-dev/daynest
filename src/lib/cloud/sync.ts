@@ -7,7 +7,7 @@
  * - Phone-specific things stay on the phone: when a reminder last rang, snoozes, push and
  *   backup-folder settings, theme and other UI flags.
  */
-import { DATA_TABLES, type DayNestDB } from '@/db/db'
+import { DATA_TABLES, SCHEMA_VERSION, upgradeRecord, type DayNestDB } from '@/db/db'
 import { KEY_FIELD } from '@/lib/backup'
 import { QUIET_KEY } from '@/lib/quietHours'
 import { decryptJson, encryptJson, rowKey, type FamilyKeys } from './crypto'
@@ -26,7 +26,11 @@ interface Payload {
   t: string
   id: string
   r?: Rec
+  /** data version (SCHEMA_VERSION) of the phone that wrote it */
+  s?: number
 }
+/** Entries from before versions were recorded were all written at v3. */
+const FIRST_TAGGED = 3
 interface LocalItem {
   t: string
   id: string
@@ -65,7 +69,18 @@ async function localSnapshot(db: DayNestDB, keys: FamilyKeys) {
   return local
 }
 
-/** Pull newer rows from the Sheet, then push this phone's newer records. */
+async function writtenByNewer(keys: FamilyKeys, r: CloudRow) {
+  try {
+    return ((await decryptJson<Payload>(keys, r.payload)).s ?? FIRST_TAGGED) > SCHEMA_VERSION
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Pull newer rows from the Sheet, then push this phone's newer records.
+ * `newer`: entries a newer DayNest wrote, left untouched here until this app updates.
+ */
 export async function syncOnce(db: DayNestDB, store: CloudStore, keys: FamilyKeys) {
   const { rows } = await store.readAll()
   // two phones appending at once can leave duplicate keys: the newest copy counts
@@ -78,14 +93,25 @@ export async function syncOnce(db: DayNestDB, store: CloudStore, keys: FamilyKey
 
   // ---- pull
   const incoming: { p: Payload; row: CloudRow }[] = []
+  // entries written by a newer DayNest: this phone can't read them safely, so it leaves them
+  // (and never overwrites them) until the app is updated
+  const newer = new Set<string>()
   for (const [k, r] of remote) {
     const l = local.get(k)
     if (l && l.ts >= r.updatedAt) continue
+    let p: Payload
     try {
-      incoming.push({ p: await decryptJson<Payload>(keys, r.payload), row: r })
+      p = await decryptJson<Payload>(keys, r.payload)
     } catch {
-      /* a row this key can't read (damaged or foreign): leave it alone */
+      continue // a row this key can't read (damaged or foreign): leave it alone
     }
+    const from = p.s ?? FIRST_TAGGED
+    if (from > SCHEMA_VERSION) {
+      newer.add(k)
+      continue
+    }
+    if (p.r && from < SCHEMA_VERSION) p.r = upgradeRecord(p.t, p.r, from)
+    incoming.push({ p, row: r })
   }
   if (incoming.length) {
     const tables = [...new Set(incoming.map((x) => x.p.t))].filter((t) =>
@@ -136,9 +162,13 @@ export async function syncOnce(db: DayNestDB, store: CloudStore, keys: FamilyKey
   for (const [k, l] of after) {
     const r = remote.get(k)
     if (r && r.updatedAt >= l.ts) continue
+    if (newer.has(k) || (r && (await writtenByNewer(keys, r)))) {
+      newer.add(k)
+      continue
+    }
     const payload: Payload = l.deleted
-      ? { t: l.t, id: l.id }
-      : { t: l.t, id: l.id, r: strip(l.t, l.rec!) }
+      ? { t: l.t, id: l.id, s: SCHEMA_VERSION }
+      : { t: l.t, id: l.id, r: strip(l.t, l.rec!), s: SCHEMA_VERSION }
     out.push({
       key: k,
       updatedAt: l.ts,
@@ -153,5 +183,5 @@ export async function syncOnce(db: DayNestDB, store: CloudStore, keys: FamilyKey
   const cutoff = new Date(Date.now() - TOMBSTONE_DAYS * 86_400_000).toISOString()
   await db.tombstones.where('deletedAt').below(cutoff).delete()
 
-  return { pulled: incoming.length, pushed: out.length }
+  return { pulled: incoming.length, pushed: out.length, newer: newer.size }
 }

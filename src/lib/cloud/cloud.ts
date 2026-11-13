@@ -28,6 +28,8 @@ export const CLOUD_SHEET = 'cloudSheetId'
 export const CLOUD_CODE = 'cloudKeyCode'
 export const CLOUD_LAST = 'cloudLastSync'
 export const CLOUD_ERROR = 'cloudError'
+/** Layout of the Sheet itself (tabs and columns). Record shapes are versioned per entry. */
+export const SHEET_FORMAT = 1
 
 let cached: { sheet: string; code: string; keys: FamilyKeys } | null = null
 let running: Promise<{ pulled: number; pushed: number }> | null = null
@@ -48,11 +50,19 @@ async function syncWith(sheet: string, code: string) {
   const store = new GoogleSheetStore(sheet)
   const { meta } = await store.readAll()
   if (!meta) throw new Error('The family Sheet is missing its key details.')
+  if (meta.v > SHEET_FORMAT)
+    throw new Error('This family Sheet needs a newer DayNest. Close and reopen the app to update.')
   const keys = await keysFor(sheet, code, meta.salt)
   if (!(await keysMatch(keys, meta.check))) throw new Error('That key code does not match.')
   const r = await syncOnce(db, store, keys)
   await setSetting(CLOUD_LAST, new Date().toISOString())
-  await setSetting(CLOUD_ERROR, null)
+  // another phone runs a newer DayNest: its newest changes wait here until this one updates
+  await setSetting(
+    CLOUD_ERROR,
+    r.newer
+      ? `${r.newer} change${r.newer > 1 ? 's' : ''} came from a newer DayNest. Close and reopen the app to update.`
+      : null,
+  )
   return r
 }
 
@@ -68,7 +78,7 @@ export async function turnOnCloud(): Promise<TurnOnResult> {
   const salt = newSalt()
   const keys = await keysFor(sheet, code, salt)
   await new GoogleSheetStore(sheet).writeMeta({
-    v: 1,
+    v: SHEET_FORMAT,
     salt,
     check: await makeCheck(keys),
     createdAt: new Date().toISOString(),

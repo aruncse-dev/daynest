@@ -111,6 +111,18 @@ export class DayNestDB extends Dexie {
   }
 }
 
+/**
+ * Bring one record written by an older version of DayNest up to today's shape.
+ * Used for backups, the family Sheet and (step by step) the database upgrades above.
+ * When the data model changes: bump SCHEMA_VERSION, add a `version(n)` block, and add the
+ * same step here so older backups and Sheet entries upgrade the same way.
+ */
+export function upgradeRecord(table: string, row: Record<string, unknown>, fromVersion: number) {
+  if (fromVersion < 2 && (table === 'tasks' || table === 'events')) toPeopleList(row)
+  // v3 only added the tombstones table: records are unchanged
+  return row
+}
+
 /** v1 rows had a single `profileId`; v2 keeps a list. Safe to call on v2 rows. */
 export function toPeopleList(row: Record<string, unknown>) {
   if (!Array.isArray(row.profileIds))
