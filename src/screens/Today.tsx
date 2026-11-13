@@ -53,8 +53,9 @@ import {
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 import { toast, useUI } from '@/store/ui'
-import { Avatar, Button, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
-import { EventRow, HabitRow, TaskRow } from '@/components/rows'
+import { Button, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
+import { EventRow } from '@/components/rows'
+import { DayItems, PersonSection } from '@/components/DayList'
 
 export function Today() {
   const today = useToday()
@@ -70,6 +71,9 @@ export function Today() {
   const isFuture = compareLocal(day, today) > 0
   const [weekAnchor, setWeekAnchor] = useState<LocalDate | null>(null)
   const week = weekOf(weekAnchor ?? day)
+  // Everyone view: your own section starts open, the rest show a one-line summary.
+  // Holds the sections the user flipped from that default.
+  const [flipped, setFlipped] = useState<Set<string>>(() => new Set())
   const ids = (profiles ?? []).map((p) => p.id)
 
   const tasks = useDayTasks(day, { includeOverdue: isToday, person })
@@ -112,28 +116,6 @@ export function Today() {
         }))
         .filter((g) => g.tasks.length + g.habits.length > 0)
     : []
-
-  const renderItems = (ts: NonNullable<typeof tasks>, hs: NonNullable<typeof habits>) => (
-    <>
-      {ts.map((t) => (
-        <TaskRow key={t.task.id} item={t} hideOwner={grouped ? groupOf(t.task) : person} />
-      ))}
-      {hs.length > 0 && (
-        <div className={cx('grid gap-2.5', ts.length > 0 && 'mt-2.5')}>
-          {hs.map((h) => (
-            <HabitRow
-              key={h.habit.id}
-              habit={h.habit}
-              done={h.done}
-              date={day}
-              locked={isFuture}
-              hideOwner={grouped ? groupOf(h.habit) : person}
-            />
-          ))}
-        </div>
-      )}
-    </>
-  )
 
   return (
     <div className="grid gap-3">
@@ -205,36 +187,36 @@ export function Today() {
             )}
           </div>
         ) : grouped ? (
-          <div className="grid gap-3">
-            {sections.map((g) => {
-              const done =
-                g.tasks.filter((t) => t.done).length + g.habits.filter((h) => h.done).length
-              const all = g.tasks.length + g.habits.length
-              return (
-                <section
-                  key={g.id || 'none'}
-                  aria-label={g.profile ? displayName(g.profile) : 'Everyone'}
-                >
-                  <div className="mb-1 flex items-center gap-2 border-b border-line-soft pb-1.5">
-                    {g.profile ? (
-                      <Avatar avatar={g.profile.avatar} color={g.profile.color} size={24} />
-                    ) : (
-                      <Avatar avatar="👪" color="var(--green2)" size={24} />
-                    )}
-                    <b className="flex-1 text-[12.5px]">
-                      {g.profile ? displayName(g.profile) : 'Everyone'}
-                    </b>
-                    <span className="text-[11px] font-semibold tabular-nums text-muted">
-                      {done}/{all}
-                    </span>
-                  </div>
-                  {renderItems(g.tasks, g.habits)}
-                </section>
-              )
-            })}
+          <div>
+            {sections.map((g) => (
+              <PersonSection
+                key={g.id || 'none'}
+                profile={g.profile}
+                tasks={g.tasks}
+                habits={g.habits}
+                date={day}
+                locked={isFuture}
+                open={flipped.has(g.id) !== !!g.profile?.isPrimary}
+                onToggle={() =>
+                  setFlipped((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(g.id)) next.delete(g.id)
+                    else next.add(g.id)
+                    return next
+                  })
+                }
+              />
+            ))}
           </div>
         ) : (
-          renderItems(tasks, habits)
+          <DayItems
+            key={`${person}${day}`}
+            tasks={tasks}
+            habits={habits}
+            date={day}
+            locked={isFuture}
+            hideOwner={person}
+          />
         )}
         {!isToday && !isFuture && total > 0 && (
           <p className="mt-3 text-[11px] text-muted">

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
@@ -28,6 +29,7 @@ import { taskAppearsOn } from '@/lib/recurrence'
 import { useUI } from '@/store/ui'
 import { Button, EmptyState, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
 import { EventRow, TaskRow } from '@/components/rows'
+import { DayItems, MoreButton } from '@/components/DayList'
 import { TabBar, useTab } from '@/components/Tabs'
 
 const TABS = ['tasks', 'calendar'] as const
@@ -111,7 +113,7 @@ function TodayList() {
           </button>
         </div>
       ) : (
-        items.map((i) => <TaskRow key={i.task.id} item={i} hideOwner={person} />)
+        <DayItems tasks={items} habits={[]} date={today} hideOwner={person} />
       )}
     </Panel>
   )
@@ -119,6 +121,7 @@ function TodayList() {
 
 function UpcomingList() {
   const today = useToday()
+  const [showAll, setShowAll] = useState(false)
   const { person } = usePerson()
   const groups = useLiveQuery(async () => {
     const [tasks, occ] = await Promise.all([
@@ -159,9 +162,19 @@ function UpcomingList() {
         </p>
       </Panel>
     )
+  // a long fortnight: show the first ~8 to-dos (whole days), the rest behind "Show more"
+  let shown = 0
+  const visible = showAll
+    ? groups
+    : groups.filter((g) => {
+        if (shown >= 8) return false
+        shown += g.items.length
+        return true
+      })
+  const hidden = groups.slice(visible.length).reduce((n, g) => n + g.items.length, 0)
   return (
     <Panel>
-      {groups.map((g) => (
+      {visible.map((g) => (
         <div key={g.date} className="mb-3 last:mb-0">
           <div className="text-xs font-bold text-muted">
             {g.date === addLocalDays(today, 1) ? 'Tomorrow' : formatLocal(g.date, 'EEEE, d MMM')}
@@ -171,6 +184,7 @@ function UpcomingList() {
           ))}
         </div>
       ))}
+      <MoreButton hidden={hidden} open={showAll} onClick={() => setShowAll(!showAll)} />
     </Panel>
   )
 }
@@ -178,12 +192,11 @@ function UpcomingList() {
 function SomedayList() {
   const today = useToday()
   const { person } = usePerson()
+  const [showAll, setShowAll] = useState(false)
   const items = useLiveQuery(
     () =>
       db.tasks
-        .filter(
-          (t) => !t.dueDate && !t.recurrenceRule && t.status === 'open' && isFor(t, person),
-        )
+        .filter((t) => !t.dueDate && !t.recurrenceRule && t.status === 'open' && isFor(t, person))
         .toArray(),
     [person],
   )
@@ -200,13 +213,20 @@ function SomedayList() {
           Ideas without a deadline go here. Add one with + and leave the date empty.
         </p>
       ) : (
-        items.map((t) => (
-          <TaskRow
-            key={t.id}
-            item={{ task: t, date: today, done: false, overdue: false }}
-            hideOwner={person}
+        <>
+          {(showAll ? items : items.slice(0, 6)).map((t) => (
+            <TaskRow
+              key={t.id}
+              item={{ task: t, date: today, done: false, overdue: false }}
+              hideOwner={person}
+            />
+          ))}
+          <MoreButton
+            hidden={Math.max(0, items.length - 6)}
+            open={showAll}
+            onClick={() => setShowAll(!showAll)}
           />
-        ))
+        </>
       )}
     </Panel>
   )

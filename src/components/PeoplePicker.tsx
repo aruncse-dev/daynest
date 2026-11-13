@@ -32,6 +32,23 @@ export function PeoplePicker({
       hint={hint ?? (value.length ? undefined : 'Nobody picked: shows under Everyone')}
     >
       <div className="flex flex-wrap gap-1.5">
+        {!single && profiles.length > 2 && (
+          <button
+            type="button"
+            aria-pressed={value.length === profiles.length}
+            onClick={() =>
+              onChange(value.length === profiles.length ? [] : profiles.map((p) => p.id))
+            }
+            className={cx(
+              'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition active:scale-95',
+              value.length === profiles.length
+                ? 'border-sage bg-sage text-white'
+                : 'border-dashed border-sage-line text-sage-ink',
+            )}
+          >
+            👪 All
+          </button>
+        )}
         {profiles.map((p) => {
           const on = value.includes(p.id)
           return (

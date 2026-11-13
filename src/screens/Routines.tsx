@@ -2,10 +2,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight } from 'lucide-react'
 import { db } from '@/db/db'
 import { saveReminder } from '@/db/actions'
-import type { Reminder } from '@/db/types'
+import type { Habit, Profile, Reminder } from '@/db/types'
 import { currentStreak, isDueOn } from '@/lib/habits'
 import { describeSchedule } from '@/lib/reminders'
-import { usePerson, useSetting, useToday } from '@/lib/hooks'
+import { usePerson, useProfiles, useSetting, useToday } from '@/lib/hooks'
+import { PersonGroup } from '@/components/DayList'
 import { isFor } from '@/lib/people'
 import { PersonBar } from '@/components/PersonBar'
 import { useUI } from '@/store/ui'
@@ -38,7 +39,9 @@ function SectionHead({ title, action }: { title: string; action?: React.ReactNod
 
 function HabitsSection() {
   const today = useToday()
-  const { person } = usePerson()
+  const { person, hasFamily } = usePerson()
+  const profiles = useProfiles()
+  const grouped = person === 'all' && hasFamily ? (profiles ?? []) : null
   const openSheet = useUI((s) => s.openSheet)
   const data = useLiveQuery(async () => {
     const [habits, entries] = await Promise.all([
@@ -64,10 +67,51 @@ function HabitsSection() {
       a.title.localeCompare(b.title),
   )
 
+  const renderHabit = (h: Habit) => {
+    const dueToday = isDueOn(h, today)
+    return (
+      <div
+        key={h.id}
+        className={cx('flex items-center gap-1', h.status !== 'active' && 'opacity-60')}
+      >
+        <div className="min-w-0 flex-1">
+          {dueToday ? (
+            <HabitRow
+              habit={h}
+              done={!!data.byHabit.get(h.id)?.has(today)}
+              date={today}
+              streak={currentStreak(h, data.byHabit.get(h.id) ?? new Set(), today)}
+              hideOwner={grouped ? (h.profileId ?? undefined) : person}
+            />
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="grid size-[38px] place-items-center rounded-xl bg-surface2 text-lg">
+                {h.emoji}
+              </div>
+              <div className="min-w-0 flex-1">
+                <b className="block truncate text-[13.5px]">{h.title}</b>
+                <small className="text-[11px] text-muted">
+                  {h.status === 'paused' ? 'Paused' : 'Not today'}
+                </small>
+              </div>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          aria-label={`${h.title} history and settings`}
+          onClick={() => openSheet({ type: 'habitDetail', habitId: h.id })}
+          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface2"
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    )
+  }
   return (
     <section>
       <SectionHead
-        title="My habits"
+        title="Habits"
         action={<LinkButton onClick={() => openSheet({ type: 'habit' })}>+ Add</LinkButton>}
       />
       <Panel>
@@ -76,52 +120,58 @@ function HabitsSection() {
             No habits yet. Tap “+ Add” and pick what suits you.
           </p>
         ) : (
-          <div className="grid gap-2.5">
-            {list.map((h) => {
-              const dueToday = isDueOn(h, today)
-              return (
-                <div
-                  key={h.id}
-                  className={cx('flex items-center gap-1', h.status !== 'active' && 'opacity-60')}
-                >
-                  <div className="min-w-0 flex-1">
-                    {dueToday ? (
-                      <HabitRow
-                        habit={h}
-                        done={!!data.byHabit.get(h.id)?.has(today)}
-                        date={today}
-                        streak={currentStreak(h, data.byHabit.get(h.id) ?? new Set(), today)}
-                        hideOwner={person}
-                      />
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="grid size-[38px] place-items-center rounded-xl bg-surface2 text-lg">
-                          {h.emoji}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <b className="block truncate text-[13.5px]">{h.title}</b>
-                          <small className="text-[11px] text-muted">
-                            {h.status === 'paused' ? 'Paused' : 'Not today'}
-                          </small>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={`${h.title} history and settings`}
-                    onClick={() => openSheet({ type: 'habitDetail', habitId: h.id })}
-                    className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface2"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+          <HabitList
+            list={list}
+            grouped={grouped}
+            renderHabit={renderHabit}
+            today={today}
+            done={data.byHabit}
+          />
         )}
       </Panel>
     </section>
+  )
+}
+
+/** Under Everyone with a family: one block per person, your own open; else a plain list. */
+function HabitList({
+  list,
+  grouped,
+  renderHabit,
+  today,
+  done,
+}: {
+  list: Habit[]
+  grouped: Profile[] | null
+  renderHabit: (h: Habit) => React.ReactNode
+  today: string
+  done: Map<string, Set<string>>
+}) {
+  if (!grouped) return <div className="grid gap-2.5">{list.map(renderHabit)}</div>
+  const groups = [...grouped.map((p) => p.id), '']
+    .map((id) => ({
+      id,
+      profile: grouped.find((p) => p.id === id),
+      habits: list.filter((h) => (h.profileId ?? '') === id),
+    }))
+    .filter((g) => g.habits.length)
+  return (
+    <div>
+      {groups.map((g) => {
+        const due = g.habits.filter((h) => isDueOn(h, today))
+        const kept = due.filter((h) => done.get(h.id)?.has(today)).length
+        return (
+          <PersonGroup
+            key={g.id || 'none'}
+            profile={g.profile}
+            defaultOpen={!!g.profile?.isPrimary}
+            summary={`${g.habits.length} habit${g.habits.length > 1 ? 's' : ''} · ${kept}/${due.length} today`}
+          >
+            <div className="grid gap-2.5">{g.habits.map(renderHabit)}</div>
+          </PersonGroup>
+        )
+      })}
+    </div>
   )
 }
 
