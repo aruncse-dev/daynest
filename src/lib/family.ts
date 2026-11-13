@@ -169,3 +169,57 @@ export const FAMILY_IDEAS: Record<FamilyRole, FamilyIdea[]> = {
     },
   ],
 }
+
+/** Ideas for yourself: everyday admin that's easy to forget. Nothing health-advice-like. */
+export const SELF_IDEAS: FamilyIdea[] = [
+  {
+    key: 'call-family',
+    kind: 'habit',
+    title: 'Call family',
+    emoji: '☎️',
+    days: [0],
+    remind: ['18:00'],
+  },
+  {
+    key: 'bills',
+    kind: 'task',
+    title: 'Pay the bills',
+    emoji: '🧾',
+    time: '10:00',
+    rule: { type: 'monthly' },
+    before: 0,
+  },
+  {
+    key: 'insurance',
+    kind: 'event',
+    title: 'Insurance renewal',
+    emoji: '🛡️',
+    type: 'important',
+    yearly: true,
+    before: -1,
+  },
+  {
+    key: 'id-renewal',
+    kind: 'event',
+    title: 'Passport / ID renewal',
+    emoji: '🛂',
+    type: 'important',
+    before: -1,
+  },
+  {
+    key: 'service',
+    kind: 'task',
+    title: 'Vehicle service',
+    emoji: '🚗',
+    time: '10:00',
+    rule: { type: 'monthly' },
+  },
+]
+
+/** Ideas for this person (dates like birthdays live in their Important dates instead). */
+export function ideasFor(p: Pick<Profile, 'role' | 'isPrimary'>): FamilyIdea[] {
+  const list = p.isPrimary ? SELF_IDEAS : FAMILY_IDEAS[roleOf(p)]
+  return list.filter(
+    (i) => !(i.kind === 'event' && (i.type === 'birthday' || i.key === 'anniversary')),
+  )
+}

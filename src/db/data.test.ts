@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { db } from './db'
+import Dexie from 'dexie'
+import { DayNestDB, db } from './db'
 import { saveHabit, saveTask, toggleHabit, toggleTask } from './actions'
 import { saveEvent, saveGoal, saveProfile, saveReminder } from './actions'
 import { buildBackup, importBackup, validateBackup } from '@/lib/backup'
@@ -108,7 +109,34 @@ describe('backup validation', () => {
     if (r.ok) {
       expect(r.summary.tasks).toBe(1)
       expect(r.summary.habitEntries).toBe(1)
-      expect(r.warnings.length).toBe(2)
+      // two duplicate warnings + "older version, will be upgraded"
+      expect(r.warnings.length).toBe(3)
+    }
+  })
+  it('upgrades v1 backups: one person per to-do/event becomes a list of people', () => {
+    const r = validateBackup(
+      JSON.stringify({
+        format: 'daynest-backup',
+        formatVersion: 1,
+        schemaVersion: 1,
+        exportedAt: '',
+        appVersion: 't',
+        tables: {
+          tasks: [
+            { id: 'a', title: 'x', profileId: 'mia' },
+            { id: 'b', title: 'y', profileId: null },
+          ],
+          events: [{ id: 'e', title: 'Birthday', profileId: 'amma' }],
+        },
+      }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.backup.tables.tasks).toEqual([
+        { id: 'a', title: 'x', profileIds: ['mia'] },
+        { id: 'b', title: 'y', profileIds: [] },
+      ])
+      expect(r.backup.tables.events).toEqual([{ id: 'e', title: 'Birthday', profileIds: ['amma'] }])
     }
   })
   it('accepts older schema versions with a warning', () => {
@@ -230,5 +258,40 @@ describe('export / import', () => {
     ;(r.backup.tables.habitEntries as Record<string, unknown>[])[0].id = { not: 'a valid key' }
     await expect(importBackup(r.backup, 'replace')).rejects.toBeTruthy()
     expect((await db.tasks.toArray()).map((t) => t.id)).toEqual(['keep'])
+  })
+})
+
+describe('schema upgrade v1 → v2', () => {
+  it('turns each to-do/event person into a list of people, keeping everything else', async () => {
+    const name = 'daynest-upgrade-test'
+    const old = new Dexie(name)
+    old.version(1).stores({
+      tasks: 'id, dueDate, status, profileId, goalId, category, archivedAt',
+      events: 'id, localDate, profileId, type',
+    })
+    await old.open()
+    await old.table('tasks').bulkPut([
+      { id: 't1', title: 'For Mia', profileId: 'mia', status: 'open' },
+      { id: 't2', title: 'For nobody', profileId: null, status: 'open' },
+    ])
+    await old
+      .table('events')
+      .put({ id: 'e1', title: 'Birthday', profileId: 'amma', type: 'birthday' })
+    old.close()
+
+    const upgraded = new DayNestDB(name)
+    await upgraded.open()
+    expect(await upgraded.tasks.get('t1')).toEqual({
+      id: 't1',
+      title: 'For Mia',
+      profileIds: ['mia'],
+      status: 'open',
+    })
+    expect((await upgraded.tasks.get('t2'))?.profileIds).toEqual([])
+    expect((await upgraded.events.get('e1'))?.profileIds).toEqual(['amma'])
+    // the new multi-person index works
+    expect((await upgraded.tasks.where('profileIds').equals('mia').toArray()).length).toBe(1)
+    upgraded.close()
+    await Dexie.delete(name)
   })
 })

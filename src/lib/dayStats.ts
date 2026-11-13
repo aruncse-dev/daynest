@@ -2,6 +2,7 @@ import type { Habit, HabitEntry, Task, TaskOccurrence } from '@/db/types'
 import { compareLocal, toLocalDate, type LocalDate } from './date'
 import { currentStreak, isDueOn } from './habits'
 import { taskAppearsOn } from './recurrence'
+import { isFor, type PersonFilter } from './people'
 
 export interface DayStat {
   date: LocalDate
@@ -31,18 +32,18 @@ interface Data {
  * - Habits: active habits scheduled that day, from the day they were created.
  *   Paused/archived habits never count against a day.
  *
- * `mine` filters to the person whose dashboard it is.
+ * `person` limits it to one person's items ('all' = the whole family).
  */
 export function computeDayStats(
   data: Data,
   dates: LocalDate[],
   today: LocalDate,
-  mine: (profileId?: string | null) => boolean = () => true,
+  person: PersonFilter = 'all',
 ): DayStat[] {
   const tasks = data.tasks.filter(
-    (t) => t.status !== 'archived' && !t.archivedAt && mine(t.profileId),
+    (t) => t.status !== 'archived' && !t.archivedAt && isFor(t, person),
   )
-  const habits = data.habits.filter((h) => mine(h.profileId))
+  const habits = data.habits.filter((h) => isFor(h, person))
   const occDone = new Set(
     data.occurrences.filter((o) => o.status === 'done').map((o) => `${o.taskId}|${o.localDate}`),
   )
@@ -87,7 +88,7 @@ export function habitsKept(stats: DayStat[], today: LocalDate): number | null {
 }
 
 /** The longest current streak among the person's active habits. */
-export function bestStreak(data: Data, today: LocalDate, mine: (p?: string | null) => boolean) {
+export function bestStreak(data: Data, today: LocalDate, person: PersonFilter = 'all') {
   const byHabit = new Map<string, Set<LocalDate>>()
   for (const e of data.entries) {
     if (!byHabit.has(e.habitId)) byHabit.set(e.habitId, new Set())
@@ -95,7 +96,7 @@ export function bestStreak(data: Data, today: LocalDate, mine: (p?: string | nul
   }
   let best = 0
   for (const h of data.habits) {
-    if (h.status !== 'active' || !mine(h.profileId)) continue
+    if (h.status !== 'active' || !isFor(h, person)) continue
     best = Math.max(best, currentStreak(h, byHabit.get(h.id) ?? new Set(), today))
   }
   return best

@@ -4,7 +4,7 @@ import { archiveTask, deleteTask, saveTask } from '@/db/actions'
 import { getLinkedReminder, MORNING_OF, syncTaskReminder } from '@/db/links'
 import type { RecurrenceRule, Task } from '@/db/types'
 import { addLocalDays, todayLocal } from '@/lib/date'
-import { usePrimaryProfile } from '@/lib/hooks'
+import { useDefaultPeople } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Button,
@@ -19,18 +19,17 @@ import {
   Toggle,
 } from '@/components/ui'
 import { RemindPicker } from './RemindPicker'
-import { ForPicker } from '@/components/ForPicker'
+import { PeoplePicker } from '@/components/PeoplePicker'
 
 type RepeatKey = 'none' | RecurrenceRule['type']
 
 export function QuickAddSheet() {
   const close = useUI((s) => s.closeSheet)
   const openSheet = useUI((s) => s.openSheet)
-  const me = usePrimaryProfile()
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState<'today' | 'tomorrow' | 'someday'>('today')
   const [important, setImportant] = useState(false)
-  const [forId, setForId] = useState<string | null>(null)
+  const [people, setPeople] = useState<string[]>(useDefaultPeople())
 
   const submit = async () => {
     if (!title.trim()) return
@@ -40,7 +39,7 @@ export function QuickAddSheet() {
       dueDate: when === 'today' ? today : when === 'tomorrow' ? addLocalDays(today, 1) : null,
       priority: important ? 'high' : 'normal',
       category: 'Personal',
-      profileId: forId ?? me?.id ?? null,
+      profileIds: people,
       status: 'open',
     })
     toast('To-do added', { emoji: '✅' })
@@ -55,7 +54,7 @@ export function QuickAddSheet() {
         <>
           <Button
             variant="outline"
-            onClick={() => openSheet({ type: 'task', defaults: { title } })}
+            onClick={() => openSheet({ type: 'task', defaults: { title, profileIds: people } })}
           >
             Time & reminder…
           </Button>
@@ -74,7 +73,7 @@ export function QuickAddSheet() {
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         aria-label="Task title"
       />
-      <ForPicker value={forId} onChange={setForId} />
+      <PeoplePicker value={people} onChange={setPeople} />
       <div className="flex flex-wrap gap-2">
         {(['today', 'tomorrow', 'someday'] as const).map((w) => (
           <Chip key={w} active={when === w} onClick={() => setWhen(w)}>
@@ -99,7 +98,7 @@ export function TaskSheet({
   remindBefore?: number
 }) {
   const close = useUI((s) => s.closeSheet)
-  const me = usePrimaryProfile()
+  const fallbackPeople = useDefaultPeople()
   const base = { ...defaults, ...task }
   const [title, setTitle] = useState(base.title ?? '')
   const [notes, setNotes] = useState(base.notes ?? '')
@@ -115,7 +114,7 @@ export function TaskSheet({
     base.recurrenceRule?.type === 'selectedDays' ? base.recurrenceRule.days : [1, 3, 5],
   )
   const [remind, setRemind] = useState<number | null>(remindBefore ?? null)
-  const [forId, setForId] = useState<string | null>(base.profileId ?? null)
+  const [people, setPeople] = useState<string[]>(base.profileIds ?? fallbackPeople)
 
   useEffect(() => {
     if (task)
@@ -135,7 +134,7 @@ export function TaskSheet({
       dueTime: dueTime || null,
       priority: important ? 'high' : 'normal',
       category: task?.category ?? 'Personal',
-      profileId: forId ?? me?.id ?? null,
+      profileIds: people,
       goalId: task?.goalId ?? null,
       recurrenceRule: rule,
       status: task?.status ?? 'open',
@@ -196,7 +195,7 @@ export function TaskSheet({
           placeholder="e.g. Call the bank"
         />
       </Field>
-      <ForPicker value={forId} onChange={setForId} />
+      <PeoplePicker value={people} onChange={setPeople} />
       <div className="grid grid-cols-2 gap-3">
         <Field
           label={repeat === 'none' ? 'Date' : 'Starts on'}

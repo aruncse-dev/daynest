@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import { todayLocal } from './date'
 import type { Profile } from '@/db/types'
+import { useUI } from '@/store/ui'
 
 /** Current local date that rolls over at midnight (and when the tab becomes visible). */
 export function useToday(): string {
@@ -74,4 +75,29 @@ export function useSetting<T>(key: string, fallback: T): T {
 export function useMembers(): Profile[] {
   const profiles = useProfiles()
   return profiles?.filter((p) => !p.isPrimary) ?? []
+}
+
+/**
+ * The person the tabs are showing: 'all' (Everyone) or a profile id.
+ * Falls back to Everyone when there are no family members or the person was removed.
+ */
+export function usePerson(): {
+  person: string
+  setPerson: (id: string) => void
+  hasFamily: boolean
+} {
+  const profiles = useProfiles()
+  const raw = useUI((s) => s.profileFilter)
+  const setPerson = useUI((s) => s.setProfileFilter)
+  const hasFamily = (profiles?.length ?? 0) > 1
+  const exists = !!profiles?.some((p) => p.id === raw)
+  // while profiles load, keep the remembered choice to avoid a flash
+  const person = !profiles ? raw : hasFamily && exists ? raw : 'all'
+  return { person, setPerson, hasFamily }
+}
+
+/** New items start out "for" the person whose tab is open (nobody under Everyone). */
+export function useDefaultPeople(): string[] {
+  const { person } = usePerson()
+  return person === 'all' ? [] : [person]
 }

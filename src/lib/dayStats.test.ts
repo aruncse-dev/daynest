@@ -35,22 +35,28 @@ describe('day stats', () => {
   const today = '2026-11-13'
   const data = {
     tasks: [
-      task({ id: 'a', dueDate: '2026-11-12', status: 'done' }),
-      task({ id: 'b', dueDate: '2026-11-10' }), // overdue
-      task({ id: 'c', dueDate: '2026-11-11', recurrenceRule: { type: 'daily' } }),
-      task({ id: 'd', dueDate: '2026-11-13', profileId: 'mia' }),
+      task({ id: 'a', dueDate: '2026-11-12', status: 'done', profileIds: ['me'] }),
+      task({ id: 'b', dueDate: '2026-11-10', profileIds: ['me', 'mia'] }), // overdue, shared
+      task({
+        id: 'c',
+        dueDate: '2026-11-11',
+        recurrenceRule: { type: 'daily' },
+        profileIds: ['me'],
+      }),
+      task({ id: 'e', dueDate: '2026-11-13' }), // for nobody: Everyone only
+      task({ id: 'd', dueDate: '2026-11-13', profileIds: ['mia'] }),
     ],
     occurrences: [
       { id: 'o', taskId: 'c', localDate: '2026-11-12', status: 'done' as const, completedAt: ts },
     ],
     habits: [
-      habit({ id: 'read' }),
-      habit({ id: 'new', createdAt: '2026-11-12T20:00:00' }),
-      habit({ id: 'paused', status: 'paused' }),
+      habit({ id: 'read', profileId: 'me' }),
+      habit({ id: 'new', createdAt: '2026-11-12T20:00:00', profileId: 'me' }),
+      habit({ id: 'paused', status: 'paused', profileId: 'me' }),
     ],
     entries: [entry('read', '2026-11-11'), entry('read', '2026-11-12'), entry('new', '2026-11-12')],
   }
-  const mine = (p?: string | null) => !p || p === 'me'
+  const mine = 'me'
 
   it('counts each date separately, a recurring to-do per occurrence', () => {
     const [d11, d12] = computeDayStats(data, ['2026-11-11', '2026-11-12'], today, mine)
@@ -58,10 +64,16 @@ describe('day stats', () => {
     expect(d12).toMatchObject({ tasksDue: 2, tasksDone: 2, habitsDue: 2, habitsDone: 2 })
     expect(statRatio(d12)).toBe(1)
   })
-  it('today includes overdue to-dos; family items and paused habits never count', () => {
+  it("today includes overdue to-dos; others' items and paused habits never count", () => {
     const [d13] = computeDayStats(data, [today], today, mine)
-    // c (recurring, today) + b (overdue); d is Mia's
+    // c (recurring, today) + b (overdue, shared with Mia); d is Mia's, e is for nobody
     expect(d13).toMatchObject({ tasksDue: 2, tasksDone: 0, habitsDue: 2, habitsDone: 0 })
+  })
+  it('Everyone counts every item once, shared or for nobody', () => {
+    const [d13] = computeDayStats(data, [today], today, 'all')
+    expect(d13.tasksDue).toBe(4) // b, c, d, e
+    const [mia] = computeDayStats(data, [today], today, 'mia')
+    expect(mia.tasksDue).toBe(2) // b (shared) + d
   })
   it('habits do not count before the day they were created', () => {
     const [d11] = computeDayStats(data, ['2026-11-11'], today, mine)

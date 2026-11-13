@@ -41,7 +41,8 @@ interface UIState {
   toasts: ToastItem[]
   toast: (message: string, opts?: Omit<ToastItem, 'id' | 'message'>) => void
   dismissToast: (id: number) => void
-  profileFilter: string // 'all' | profile id
+  /** 'all' (Everyone) or a profile id. Read through `usePerson()`, which checks it still exists. */
+  profileFilter: string
   setProfileFilter: (id: string) => void
   activeReminders: ActiveReminder[]
   pushReminder: (r: Reminder, full?: boolean) => void
@@ -49,6 +50,15 @@ interface UIState {
 }
 
 let toastSeq = 1
+
+const PERSON_KEY = 'daynest.person'
+function readPerson(): string {
+  try {
+    return localStorage.getItem(PERSON_KEY) || 'all'
+  } catch {
+    return 'all'
+  }
+}
 
 export const useUI = create<UIState>((set) => ({
   sheet: null,
@@ -65,8 +75,16 @@ export const useUI = create<UIState>((set) => ({
     )
   },
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-  profileFilter: 'all',
-  setProfileFilter: (profileFilter) => set({ profileFilter }),
+  // which person the tabs show; remembered on this device as a convenience only
+  profileFilter: readPerson(),
+  setProfileFilter: (profileFilter) => {
+    try {
+      localStorage.setItem(PERSON_KEY, profileFilter)
+    } catch {
+      /* private mode: just don't remember */
+    }
+    set({ profileFilter })
+  },
   activeReminders: [],
   pushReminder: (reminder, full) =>
     set((s) => ({

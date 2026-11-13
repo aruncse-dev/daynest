@@ -92,7 +92,7 @@ export async function applySuggestions(chosen: Suggestion[], answers: SetupAnswe
         title: s.title,
         priority: 'normal',
         category: 'Personal',
-        profileId: meId,
+        profileIds: [meId],
         dueDate: start,
         dueTime: s.time ?? null,
         recurrenceRule: s.rule,

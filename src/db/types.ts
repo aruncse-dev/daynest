@@ -33,7 +33,8 @@ export interface Task {
   dueTime?: string | null // HH:mm
   priority: Priority
   category: string
-  profileId?: string | null
+  /** Who it's for. Empty = not tied to anyone (shows under Everyone). One shared item, ticked once. */
+  profileIds?: string[]
   goalId?: string | null
   recurrenceRule?: RecurrenceRule | null
   /** For one-off tasks. Recurring tasks track completion per occurrence. */
@@ -79,7 +80,13 @@ export interface HabitEntry {
   note?: string
 }
 
-export type EventType = 'event' | 'important' | 'birthday' | 'school' | 'appointment'
+export type EventType =
+  | 'event'
+  | 'important'
+  | 'birthday'
+  | 'anniversary'
+  | 'school'
+  | 'appointment'
 
 export interface CalendarEvent {
   id: string
@@ -87,7 +94,10 @@ export interface CalendarEvent {
   localDate: LocalDate
   startTime?: string | null
   endTime?: string | null
-  profileId?: string | null
+  /** Who it's for. Empty = everyone / not tied to anyone. */
+  profileIds?: string[]
+  /** optional own icon (otherwise one per type) */
+  emoji?: string
   notes?: string
   type: EventType
   repeatYearly?: boolean

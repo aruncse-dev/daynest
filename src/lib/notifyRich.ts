@@ -6,18 +6,17 @@ import { drawReminderCard, reminderUrl } from './notifyCard'
 
 const NIGHT_KEYS = new Set(['phonefree', 'phonefree-soon', 'sleep'])
 
-/** "Today 3 of 5 done" for the phone's owner, or null when nothing is planned. */
+/** "Today 3 of 5 done" for the whole family, or null when nothing is planned. */
 async function todayLine(now: Date): Promise<string | null> {
   const today = todayLocal(now)
-  const [me, tasks, occurrences, habits, entries] = await Promise.all([
-    db.profiles.filter((p) => !!p.isPrimary).first(),
+  const [tasks, occurrences, habits, entries] = await Promise.all([
     db.tasks.toArray(),
     db.taskOccurrences.where('localDate').equals(today).toArray(),
     db.habits.toArray(),
     db.habitEntries.where('localDate').equals(today).toArray(),
   ])
-  const mine = (p?: string | null) => !p || p === me?.id
-  const [s] = computeDayStats({ tasks, occurrences, habits, entries }, [today], today, mine)
+  // the whole family's day: one person looks after everyone on this phone
+  const [s] = computeDayStats({ tasks, occurrences, habits, entries }, [today], today)
   return statTotal(s) ? `Today ${statDone(s)} of ${statTotal(s)} done` : null
 }
 

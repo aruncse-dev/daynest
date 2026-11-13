@@ -3,21 +3,31 @@ import { Bell, Repeat } from 'lucide-react'
 import { db } from '@/db/db'
 import type { CalendarEvent, Habit, ReminderLink } from '@/db/types'
 import { toggleHabit, toggleTask } from '@/db/actions'
-import { formatLocal, formatTime12, todayLocal, type LocalDate } from '@/lib/date'
+import { addLocalDays, formatLocal, formatTime12, todayLocal, type LocalDate } from '@/lib/date'
 import type { DayTask } from '@/lib/queries'
 import { describeRule } from '@/lib/recurrence'
+import { eventEmoji } from '@/lib/people'
 import { toast, useUI } from '@/store/ui'
 import { useProfileMap } from '@/lib/hooks'
 import { chime } from '@/lib/sound'
 import { CheckBox, Tag, cx } from './ui'
 
-/** Name tag for items that belong to a family member (not you). */
-function OwnerTag({ profileId }: { profileId?: string | null }) {
-  const p = useProfileMap().get(profileId ?? '')
-  if (!p || p.isPrimary) return null
+/**
+ * Who it's for: "· 🧒 Mia", "· 🧒 Mia & 👵 Amma", "· 🙂 Me +2". Hidden when it's only for you,
+ * or when the list is already showing that one person (`hide`).
+ */
+export function OwnerTag({ ids, hide }: { ids: string[]; hide?: string }) {
+  const map = useProfileMap()
+  const people = ids.map((id) => map.get(id)).filter((p) => !!p)
+  if (!people.length || (people.length === 1 && (people[0].isPrimary || people[0].id === hide)))
+    return null
+  const label = (p: (typeof people)[number]) => `${p.avatar} ${p.isPrimary ? 'Me' : p.name}`
   return (
-    <span className="inline-flex items-center gap-0.5 font-semibold text-ink/70">
-      · {p.avatar} {p.name}
+    <span className="inline-flex min-w-0 items-center gap-0.5 font-semibold text-ink/70">
+      ·{' '}
+      {people.length <= 2
+        ? people.map(label).join(' & ')
+        : `${label(people[0])} +${people.length - 1}`}
     </span>
   )
 }
@@ -41,7 +51,16 @@ function BellTag({ text }: { text: string | null }) {
   )
 }
 
-export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean }) {
+export function TaskRow({
+  item,
+  showDate,
+  hideOwner,
+}: {
+  item: DayTask
+  showDate?: boolean
+  /** the person whose list this is: no need to tag them */
+  hideOwner?: string
+}) {
   const { task, done, overdue, date } = item
   const openSheet = useUI((s) => s.openSheet)
   const bell = useReminderTimes('task', task.id)
@@ -101,7 +120,7 @@ export function TaskRow({ item, showDate }: { item: DayTask; showDate?: boolean 
               · <BellTag text={bell} />
             </span>
           )}
-          <OwnerTag profileId={task.profileId} />
+          <OwnerTag ids={task.profileIds ?? []} hide={hideOwner} />
         </div>
       </button>
       {!done && (task.priority === 'high' || task.priority === 'important') && (
@@ -117,7 +136,9 @@ export function HabitRow({
   date = todayLocal(),
   streak,
   locked,
+  hideOwner,
 }: {
+  hideOwner?: string
   habit: Habit
   done: boolean
   date?: LocalDate
@@ -140,7 +161,7 @@ export function HabitRow({
         <b className="block truncate text-[13.5px]">{habit.title}</b>
         <small className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
           {habit.targetLabel ?? 'Daily'}
-          <OwnerTag profileId={habit.profileId} />
+          <OwnerTag ids={habit.profileId ? [habit.profileId] : []} hide={hideOwner} />
           {streak ? <span className="text-amber-ink">· 🔥 {streak}</span> : null}
           {bell && (
             <span className="inline-flex items-center gap-1">
@@ -166,15 +187,18 @@ export function HabitRow({
   )
 }
 
-const EVENT_EMOJI: Record<CalendarEvent['type'], string> = {
-  event: '📅',
-  appointment: '🩺',
-  school: '🎒',
-  birthday: '🎂',
-  important: '⭐',
-}
-
-export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDate }) {
+export function EventRow({
+  event,
+  date,
+  hideOwner,
+  countdown,
+}: {
+  event: CalendarEvent
+  date: LocalDate
+  hideOwner?: string
+  /** show "in 5 days" instead of the weekday (important dates) */
+  countdown?: boolean
+}) {
   const openSheet = useUI((s) => s.openSheet)
   const bell = useReminderTimes('event', event.id)
   return (
@@ -189,19 +213,39 @@ export function EventRow({ event, date }: { event: CalendarEvent; date: LocalDat
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-semibold">
-          {EVENT_EMOJI[event.type]} {event.title}
+          {eventEmoji(event)} {event.title}
         </div>
         <small className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted">
-          {formatLocal(date, 'EEEE')}
+          {countdown ? `${daysUntil(date)}${yearsText(event, date)}` : formatLocal(date, 'EEEE')}
           {event.startTime ? ` · ${formatTime12(event.startTime)}` : ' · All day'}
           {bell && (
             <span className="inline-flex items-center gap-1">
               · <BellTag text={bell} />
             </span>
           )}
-          <OwnerTag profileId={event.profileId} />
+          <OwnerTag ids={event.profileIds ?? []} hide={hideOwner} />
         </small>
       </div>
     </button>
   )
+}
+
+function daysUntil(date: LocalDate): string {
+  const today = todayLocal()
+  if (date === today) return 'Today 🎉'
+  if (date === addLocalDays(today, 1)) return 'Tomorrow'
+  const days = Math.round(
+    (new Date(`${date}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000,
+  )
+  return `In ${days} days`
+}
+
+/** " · turns 40" for birthdays, " · 10 years" for anniversaries, when the first year is known. */
+function yearsText(event: CalendarEvent, on: LocalDate): string {
+  if (!event.repeatYearly && event.type !== 'birthday') return ''
+  const years = Number(on.slice(0, 4)) - Number(event.localDate.slice(0, 4))
+  if (years <= 0) return ''
+  if (event.type === 'birthday') return ` · turns ${years}`
+  if (event.type === 'anniversary') return ` · ${years} year${years > 1 ? 's' : ''}`
+  return ''
 }

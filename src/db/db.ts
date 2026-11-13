@@ -14,7 +14,7 @@ import type {
 } from './types'
 
 export const DB_NAME = 'daynest'
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export class DayNestDB extends Dexie {
   profiles!: EntityTable<Profile, 'id'>
@@ -33,7 +33,7 @@ export class DayNestDB extends Dexie {
     super(name)
     // Versioned schema. Add new `this.version(n)` blocks for migrations —
     // never edit an already-shipped version.
-    this.version(SCHEMA_VERSION).stores({
+    this.version(1).stores({
       profiles: 'id, name, archivedAt',
       tasks: 'id, dueDate, status, profileId, goalId, category, archivedAt',
       // compound unique index guarantees one occurrence record per task per day
@@ -48,7 +48,28 @@ export class DayNestDB extends Dexie {
       settings: 'key',
       backupHistory: 'id, createdAt',
     })
+    // v2: to-dos and events can be for several people (or nobody): profileId -> profileIds[]
+    this.version(2)
+      .stores({
+        tasks: 'id, dueDate, status, *profileIds, goalId, category, archivedAt',
+        events: 'id, localDate, *profileIds, type',
+      })
+      .upgrade(async (tx) => {
+        for (const name of ['tasks', 'events'])
+          await tx
+            .table(name)
+            .toCollection()
+            .modify((row: Record<string, unknown>) => toPeopleList(row))
+      })
   }
+}
+
+/** v1 rows had a single `profileId`; v2 keeps a list. Safe to call on v2 rows. */
+export function toPeopleList(row: Record<string, unknown>) {
+  if (!Array.isArray(row.profileIds))
+    row.profileIds = typeof row.profileId === 'string' && row.profileId ? [row.profileId] : []
+  delete row.profileId
+  return row
 }
 
 export const db = new DayNestDB()

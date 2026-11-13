@@ -5,7 +5,9 @@ import { saveReminder } from '@/db/actions'
 import type { Reminder } from '@/db/types'
 import { currentStreak, isDueOn } from '@/lib/habits'
 import { describeSchedule } from '@/lib/reminders'
-import { useSetting, useToday } from '@/lib/hooks'
+import { usePerson, useSetting, useToday } from '@/lib/hooks'
+import { isFor } from '@/lib/people'
+import { PersonBar } from '@/components/PersonBar'
 import { useUI } from '@/store/ui'
 import { LinkButton, Panel, Skeleton, Tag, Toggle, cx } from '@/components/ui'
 import { HabitRow } from '@/components/rows'
@@ -16,6 +18,7 @@ export function Routines() {
   return (
     <div className="grid gap-3">
       <h1 className="text-[24px] font-bold tracking-[-0.8px]">Routines</h1>
+      <PersonBar />
       <HabitsSection />
       <NudgesSection />
     </div>
@@ -35,10 +38,11 @@ function SectionHead({ title, action }: { title: string; action?: React.ReactNod
 
 function HabitsSection() {
   const today = useToday()
+  const { person } = usePerson()
   const openSheet = useUI((s) => s.openSheet)
   const data = useLiveQuery(async () => {
     const [habits, entries] = await Promise.all([
-      db.habits.filter((h) => h.status !== 'archived').toArray(),
+      db.habits.filter((h) => h.status !== 'archived' && isFor(h, person)).toArray(),
       db.habitEntries.toArray(),
     ])
     const byHabit = new Map<string, Set<string>>()
@@ -47,7 +51,7 @@ function HabitsSection() {
       byHabit.get(e.habitId)!.add(e.localDate)
     }
     return { habits, byHabit }
-  }, [])
+  }, [person])
   if (!data)
     return (
       <Panel>
@@ -87,6 +91,7 @@ function HabitsSection() {
                         done={!!data.byHabit.get(h.id)?.has(today)}
                         date={today}
                         streak={currentStreak(h, data.byHabit.get(h.id) ?? new Set(), today)}
+                        hideOwner={person}
                       />
                     ) : (
                       <div className="flex items-center gap-3">
@@ -124,9 +129,14 @@ function HabitsSection() {
 
 function NudgesSection() {
   const alwaysOn = useSetting(PUSH_ENABLED_KEY, false)
+  const { person } = usePerson()
   const openSheet = useUI((s) => s.openSheet)
   // stand-alone nudges only: habit/to-do/event reminders live on those items
-  const reminders = useLiveQuery(() => db.reminders.filter((r) => !r.link).toArray(), [])
+  const reminders = useLiveQuery(
+    () =>
+      db.reminders.filter((r) => !r.link && (person === 'all' || r.profileId === person)).toArray(),
+    [person],
+  )
   const list = (reminders ?? []).sort(
     (a, b) => Number(b.enabled) - Number(a.enabled) || a.title.localeCompare(b.title),
   )

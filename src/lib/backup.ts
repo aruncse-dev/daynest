@@ -1,4 +1,4 @@
-import { DATA_TABLES, SCHEMA_VERSION, db, type DataTableName } from '@/db/db'
+import { DATA_TABLES, SCHEMA_VERSION, db, toPeopleList, type DataTableName } from '@/db/db'
 import { nowIso, todayLocal } from './date'
 import { uuid } from './id'
 
@@ -149,7 +149,10 @@ export function validateBackup(text: string): ValidationResult {
       clean.push(row)
     }
     if (dupes) warnings.push(`${dupes} duplicate ${name} record(s) were skipped.`)
-    tables[name] = clean
+    // older backups: one person per to-do/event -> list of people
+    if (name === 'tasks' || name === 'events')
+      tables[name] = clean.map((r) => toPeopleList({ ...(r as Record<string, unknown>) }))
+    else tables[name] = clean
   }
   // de-duplicate habit entries on [habitId+localDate] & occurrences on [taskId+localDate]
   for (const [name, a, c] of [

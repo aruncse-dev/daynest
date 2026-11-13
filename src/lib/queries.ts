@@ -1,4 +1,5 @@
-import { bestStreak, computeDayStats } from './dayStats'
+import { bestStreak, computeDayStats, type DayStat } from './dayStats'
+import { isFor, type PersonFilter } from './people'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/db/db'
 import type { Habit, Task } from '@/db/types'
@@ -29,7 +30,7 @@ export function sortDayTasks(a: DayTask, b: DayTask) {
 /** Tasks for one day: recurring occurrences, one-offs due that day, and (for today) gentle overdue items. */
 export function useDayTasks(
   date: LocalDate,
-  opts: { includeOverdue?: boolean; profileId?: string } = {},
+  opts: { includeOverdue?: boolean; person?: PersonFilter } = {},
 ) {
   return useLiveQuery(async () => {
     const [tasks, occ] = await Promise.all([
@@ -39,7 +40,7 @@ export function useDayTasks(
     const doneIds = new Set(occ.filter((o) => o.status === 'done').map((o) => o.taskId))
     const out: DayTask[] = []
     for (const t of tasks) {
-      if (opts.profileId && opts.profileId !== 'all' && t.profileId !== opts.profileId) continue
+      if (opts.person && !isFor(t, opts.person)) continue
       if (taskAppearsOn(t, date)) {
         out.push({
           task: t,
@@ -58,7 +59,7 @@ export function useDayTasks(
       }
     }
     return out.sort(sortDayTasks)
-  }, [date, opts.includeOverdue, opts.profileId])
+  }, [date, opts.includeOverdue, opts.person])
 }
 
 export interface HabitWithState {
@@ -66,7 +67,7 @@ export interface HabitWithState {
   done: boolean
 }
 
-export function useHabitsForDay(date: LocalDate, profileId?: string) {
+export function useHabitsForDay(date: LocalDate, person: PersonFilter = 'all') {
   return useLiveQuery(async () => {
     const [habits, entries] = await Promise.all([
       db.habits.filter((h) => h.status !== 'archived').toArray(),
@@ -75,9 +76,9 @@ export function useHabitsForDay(date: LocalDate, profileId?: string) {
     const done = new Set(entries.map((e) => e.habitId))
     return habits
       .filter((h) => isDueOn(h, date))
-      .filter((h) => !profileId || profileId === 'all' || h.profileId === profileId)
+      .filter((h) => isFor(h, person))
       .map((habit) => ({ habit, done: done.has(habit.id) }))
-  }, [date, profileId])
+  }, [date, person])
 }
 
 export function useEventsBetween(from: LocalDate, to: LocalDate) {
@@ -85,7 +86,7 @@ export function useEventsBetween(from: LocalDate, to: LocalDate) {
 }
 
 /** Per-date done/planned counts for the given dates (see `computeDayStats`). */
-export function useDayStats(dates: LocalDate[], today: LocalDate, meId?: string) {
+export function useDayStats(dates: LocalDate[], today: LocalDate, person: PersonFilter = 'all') {
   return useLiveQuery(async () => {
     const [tasks, occurrences, habits, entries] = await Promise.all([
       db.tasks.toArray(),
@@ -97,10 +98,25 @@ export function useDayStats(dates: LocalDate[], today: LocalDate, meId?: string)
       db.habitEntries.toArray(),
     ])
     const data = { tasks, occurrences, habits, entries }
-    const mine = (p?: string | null) => !p || p === meId
     return {
-      days: computeDayStats(data, dates, today, mine),
-      streak: bestStreak(data, today, mine),
+      days: computeDayStats(data, dates, today, person),
+      streak: bestStreak(data, today, person),
     }
-  }, [dates.join(), today, meId])
+  }, [dates.join(), today, person])
+}
+
+/** Today's numbers for Everyone and for each person (for the people bar and family overview). */
+export function usePeopleDay(date: LocalDate, today: LocalDate, ids: string[]) {
+  return useLiveQuery(async () => {
+    const [tasks, occurrences, habits, entries] = await Promise.all([
+      db.tasks.toArray(),
+      db.taskOccurrences.where('localDate').equals(date).toArray(),
+      db.habits.toArray(),
+      db.habitEntries.where('localDate').equals(date).toArray(),
+    ])
+    const data = { tasks, occurrences, habits, entries }
+    const out: Record<string, DayStat> = {}
+    for (const id of ['all', ...ids]) out[id] = computeDayStats(data, [date], today, id)[0]
+    return out
+  }, [date, today, ids.join()])
 }

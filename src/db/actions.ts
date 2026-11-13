@@ -34,6 +34,7 @@ export async function archiveProfile(id: string) {
 export async function saveTask(draft: Draft<Task>) {
   const existing = draft.id ? await db.tasks.get(draft.id) : undefined
   const row = { ...stamp(draft, existing), id: draft.id ?? uuid() } as Task
+  row.profileIds = row.profileIds ?? []
   await db.tasks.put(row)
   return row
 }
@@ -123,6 +124,7 @@ export async function deleteHabit(id: string) {
 export async function saveEvent(draft: Draft<CalendarEvent>) {
   const existing = draft.id ? await db.events.get(draft.id) : undefined
   const row = { ...stamp(draft, existing), id: draft.id ?? uuid() } as CalendarEvent
+  row.profileIds = row.profileIds ?? []
   await db.events.put(row)
   return row
 }

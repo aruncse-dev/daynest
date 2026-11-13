@@ -14,7 +14,9 @@ import {
   WEEKDAY_LETTER,
   WEEK_ORDER,
 } from '@/lib/date'
-import { useToday } from '@/lib/hooks'
+import { usePerson, useToday } from '@/lib/hooks'
+import { isFor } from '@/lib/people'
+import { PersonBar } from '@/components/PersonBar'
 import {
   eventsBetween,
   sortDayTasks,
@@ -34,7 +36,8 @@ export function Plan() {
   const [tab, setTab] = useTab(TABS, 'tasks')
   return (
     <div>
-      <h1 className="mb-3 text-[24px] font-bold tracking-[-0.8px]">To-dos</h1>
+      <h1 className="mb-2 text-[24px] font-bold tracking-[-0.8px]">To-dos</h1>
+      <PersonBar className="mb-3" />
       <TabBar
         label="Plan"
         value={tab}
@@ -86,7 +89,8 @@ function TasksTab() {
 function TodayList() {
   const today = useToday()
   const openSheet = useUI((s) => s.openSheet)
-  const items = useDayTasks(today, { includeOverdue: true })
+  const { person } = usePerson()
+  const items = useDayTasks(today, { includeOverdue: true, person })
   if (!items)
     return (
       <Panel>
@@ -107,7 +111,7 @@ function TodayList() {
           </button>
         </div>
       ) : (
-        items.map((i) => <TaskRow key={i.task.id} item={i} />)
+        items.map((i) => <TaskRow key={i.task.id} item={i} hideOwner={person} />)
       )}
     </Panel>
   )
@@ -115,9 +119,10 @@ function TodayList() {
 
 function UpcomingList() {
   const today = useToday()
+  const { person } = usePerson()
   const groups = useLiveQuery(async () => {
     const [tasks, occ] = await Promise.all([
-      db.tasks.filter((t) => t.status !== 'archived').toArray(),
+      db.tasks.filter((t) => t.status !== 'archived' && isFor(t, person)).toArray(),
       db.taskOccurrences
         .where('localDate')
         .between(addLocalDays(today, 1), addLocalDays(today, 14), true, true)
@@ -139,7 +144,7 @@ function UpcomingList() {
       if (items.length) out.push({ date, items })
     }
     return out
-  }, [today])
+  }, [today, person])
   if (!groups)
     return (
       <Panel>
@@ -162,7 +167,7 @@ function UpcomingList() {
             {g.date === addLocalDays(today, 1) ? 'Tomorrow' : formatLocal(g.date, 'EEEE, d MMM')}
           </div>
           {g.items.map((i) => (
-            <TaskRow key={i.task.id} item={i} />
+            <TaskRow key={i.task.id} item={i} hideOwner={person} />
           ))}
         </div>
       ))}
@@ -172,9 +177,15 @@ function UpcomingList() {
 
 function SomedayList() {
   const today = useToday()
+  const { person } = usePerson()
   const items = useLiveQuery(
-    () => db.tasks.filter((t) => !t.dueDate && !t.recurrenceRule && t.status === 'open').toArray(),
-    [],
+    () =>
+      db.tasks
+        .filter(
+          (t) => !t.dueDate && !t.recurrenceRule && t.status === 'open' && isFor(t, person),
+        )
+        .toArray(),
+    [person],
   )
   if (!items)
     return (
@@ -190,7 +201,11 @@ function SomedayList() {
         </p>
       ) : (
         items.map((t) => (
-          <TaskRow key={t.id} item={{ task: t, date: today, done: false, overdue: false }} />
+          <TaskRow
+            key={t.id}
+            item={{ task: t, date: today, done: false, overdue: false }}
+            hideOwner={person}
+          />
         ))
       )}
     </Panel>
@@ -198,8 +213,9 @@ function SomedayList() {
 }
 
 function DoneList() {
+  const { person } = usePerson()
   const data = useLiveQuery(async () => {
-    const tasks = await db.tasks.toArray()
+    const tasks = (await db.tasks.toArray()).filter((t) => isFor(t, person))
     const byId = new Map(tasks.map((t) => [t.id, t]))
     const occ = (
       await db.taskOccurrences.orderBy('localDate').reverse().limit(40).toArray()
@@ -221,7 +237,7 @@ function DoneList() {
       })),
     ].sort((a, b) => b.date.localeCompare(a.date))
     return { items: items.slice(0, 40), archived: tasks.filter((t) => t.status === 'archived') }
-  }, [])
+  }, [person])
   if (!data)
     return (
       <div>
@@ -264,6 +280,7 @@ function DoneList() {
 /* ---------------- Calendar ---------------- */
 
 function CalendarTab() {
+  const { person } = usePerson()
   const today = useToday()
   const [params, setParams] = useSearchParams()
   const qd = params.get('date')
@@ -277,8 +294,8 @@ function CalendarTab() {
   const days = monthGrid(selected)
   const marks = useLiveQuery(async () => {
     const [tasks, events] = await Promise.all([
-      db.tasks.filter((t) => t.status !== 'archived').toArray(),
-      db.events.toArray(),
+      db.tasks.filter((t) => t.status !== 'archived' && isFor(t, person)).toArray(),
+      db.events.filter((e) => isFor(e, person)).toArray(),
     ])
     const ev = eventsBetween(events, days[0], days[41])
     const map = new Map<string, { tasks: number; events: number }>()
@@ -288,7 +305,7 @@ function CalendarTab() {
         events: ev.filter((e) => e.occursOn === d).length,
       })
     return map
-  }, [days[0]])
+  }, [days[0], person])
   const shift = (dir: number) => {
     const d = parseLocalDate(selected)
     select(toLocalDate(new Date(d.getFullYear(), d.getMonth() + dir, 1)))
@@ -371,8 +388,9 @@ function CalendarTab() {
 
 function DayAgenda({ date, onAddEvent }: { date: string; onAddEvent: () => void }) {
   const today = useToday()
-  const tasks = useDayTasks(date)
-  const events = useEventsBetween(date, date)
+  const { person } = usePerson()
+  const tasks = useDayTasks(date, { person })
+  const events = useEventsBetween(date, date)?.filter((e) => isFor(e, person))
   const openSheet = useUI((s) => s.openSheet)
   return (
     <Panel>
@@ -394,12 +412,12 @@ function DayAgenda({ date, onAddEvent }: { date: string; onAddEvent: () => void 
           {!!events?.length && (
             <div className="mb-2 grid gap-3">
               {events.map((e) => (
-                <EventRow key={e.id} event={e} date={date} />
+                <EventRow key={e.id} event={e} date={date} hideOwner={person} />
               ))}
             </div>
           )}
           {tasks?.map((t) => (
-            <TaskRow key={t.task.id} item={t} />
+            <TaskRow key={t.task.id} item={t} hideOwner={person} />
           ))}
         </>
       )}

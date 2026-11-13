@@ -22,7 +22,7 @@ import type {
 } from '@/db/types'
 import { todayLocal } from '@/lib/date'
 import { HABIT_TEMPLATES } from '@/lib/templates'
-import { usePrimaryProfile } from '@/lib/hooks'
+import { useDefaultPeople } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Button,
@@ -38,29 +38,10 @@ import {
   Toggle,
 } from '@/components/ui'
 import { RemindPicker } from './RemindPicker'
-import { ForPicker } from '@/components/ForPicker'
+import { PeoplePicker } from '@/components/PeoplePicker'
+import { EmojiPicker } from '@/components/EmojiPicker'
+import { EVENT_EMOJI } from '@/lib/people'
 import { ROLES, roleOf, type FamilyRole } from '@/lib/family'
-
-const EMOJIS = [
-  '🌱',
-  '🚶',
-  '💪',
-  '📖',
-  '📝',
-  '🎯',
-  '🧹',
-  '🙏',
-  '🌿',
-  '😴',
-  '🥗',
-  '📵',
-  '🌅',
-  '💡',
-  '🎨',
-  '🎵',
-  '🦷',
-  '☀️',
-]
 
 /** Up to three reminder times, or none. */
 function TimesEditor({
@@ -114,7 +95,7 @@ export function HabitSheet({
   remindTimes?: string[]
 }) {
   const close = useUI((s) => s.closeSheet)
-  const me = usePrimaryProfile()
+  const fallbackPeople = useDefaultPeople()
   const base = { ...defaults, ...habit }
   const [title, setTitle] = useState(base.title ?? '')
   const [emoji, setEmoji] = useState(base.emoji ?? '🌱')
@@ -125,7 +106,9 @@ export function HabitSheet({
   )
   const [templateKey, setTemplateKey] = useState(base.templateKey)
   const [times, setTimes] = useState<string[]>(remindTimes ?? [])
-  const [forId, setForId] = useState<string | null>(habit?.profileId ?? defaults?.profileId ?? null)
+  const [people, setPeople] = useState<string[]>(
+    base.profileId !== undefined ? (base.profileId ? [base.profileId] : []) : fallbackPeople,
+  )
 
   useEffect(() => {
     if (habit) void getLinkedReminder('habit', habit.id).then((r) => setTimes(r?.times ?? []))
@@ -133,20 +116,31 @@ export function HabitSheet({
 
   const save = async () => {
     if (!title.trim()) return
-    const saved = await saveHabit({
-      id: habit?.id,
-      title: title.trim(),
-      emoji,
-      targetLabel: targetLabel.trim() || undefined,
-      description: habit?.description,
-      templateKey,
-      profileId: forId ?? me?.id ?? null,
-      scheduleDays: freq === 'daily' ? [] : days,
-      status: habit?.status ?? 'active',
-      archivedAt: habit?.archivedAt ?? null,
-    })
-    await syncHabitReminder(saved, times.filter(Boolean))
-    toast(habit ? 'Habit updated — history kept' : 'Habit added', { emoji })
+    // a habit belongs to one person (their own streak): several people = one habit each
+    const owners: (string | null)[] = habit ? [people[0] ?? null] : people.length ? people : [null]
+    for (const owner of owners) {
+      const saved = await saveHabit({
+        id: habit?.id,
+        title: title.trim(),
+        emoji,
+        targetLabel: targetLabel.trim() || undefined,
+        description: habit?.description,
+        templateKey,
+        profileId: owner,
+        scheduleDays: freq === 'daily' ? [] : days,
+        status: habit?.status ?? 'active',
+        archivedAt: habit?.archivedAt ?? null,
+      })
+      await syncHabitReminder(saved, times.filter(Boolean))
+    }
+    toast(
+      habit
+        ? 'Habit updated — history kept'
+        : owners.length > 1
+          ? `Added for ${owners.length} people`
+          : 'Habit added',
+      { emoji },
+    )
     close()
   }
 
@@ -227,23 +221,21 @@ export function HabitSheet({
           maxLength={80}
         />
       </Field>
-      <ForPicker value={forId} onChange={setForId} />
-      <Field group label="Icon">
-        <div className="flex flex-wrap gap-1.5">
-          {EMOJIS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              aria-pressed={emoji === e}
-              aria-label={`Icon ${e}`}
-              onClick={() => setEmoji(e)}
-              className={`grid size-10 place-items-center rounded-xl text-lg transition ${emoji === e ? 'bg-sage-soft ring-2 ring-sage' : 'bg-surface2'}`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      </Field>
+      <PeoplePicker
+        value={people}
+        onChange={setPeople}
+        single={!!habit}
+        hint={
+          habit
+            ? undefined
+            : people.length > 1
+              ? 'Each person gets their own habit and streak'
+              : people.length
+                ? undefined
+                : 'Nobody picked: shows under Everyone'
+        }
+      />
+      <EmojiPicker value={emoji} onChange={setEmoji} />
       <Field label="Your target (optional)" hint="In your own words, e.g. 10 pages, 20 minutes">
         <Input value={targetLabel} onChange={(e) => setTarget(e.target.value)} maxLength={40} />
       </Field>
@@ -267,11 +259,13 @@ export function HabitSheet({
 }
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
-  { value: 'event', label: '📅 Event' },
-  { value: 'appointment', label: '🩺 Appointment' },
-  { value: 'birthday', label: '🎂 Birthday' },
-  { value: 'important', label: '⭐ Important date' },
+  { value: 'event', label: 'Event' },
+  { value: 'appointment', label: 'Appointment' },
+  { value: 'birthday', label: 'Birthday' },
+  { value: 'anniversary', label: 'Anniversary' },
+  { value: 'important', label: 'Important date' },
 ]
+const YEARLY_TYPES = new Set<EventType>(['birthday', 'anniversary'])
 
 export function EventSheet({
   event,
@@ -285,15 +279,18 @@ export function EventSheet({
   remindBefore?: number
 }) {
   const close = useUI((s) => s.closeSheet)
+  const fallbackPeople = useDefaultPeople()
   const base = { ...defaults, ...event }
   const [title, setTitle] = useState(base.title ?? '')
+  const [emoji, setEmoji] = useState(base.emoji ?? '')
+  const [iconOpen, setIconOpen] = useState(false)
   const [localDate, setDate] = useState(base.localDate ?? date ?? todayLocal())
   const [startTime, setStart] = useState(base.startTime ?? '')
   const [type, setType] = useState<EventType>(base.type ?? 'event')
   const [repeatYearly, setYearly] = useState(base.repeatYearly ?? false)
   const [notes, setNotes] = useState(base.notes ?? '')
   const [remind, setRemind] = useState<number | null>(remindBefore ?? null)
-  const [forId, setForId] = useState<string | null>(base.profileId ?? null)
+  const [people, setPeople] = useState<string[]>(base.profileIds ?? fallbackPeople)
 
   useEffect(() => {
     if (event)
@@ -309,12 +306,13 @@ export function EventSheet({
       startTime: startTime || null,
       endTime: event?.endTime ?? null,
       type,
-      profileId: forId,
-      repeatYearly: repeatYearly || type === 'birthday',
+      emoji: emoji || undefined,
+      profileIds: people,
+      repeatYearly: repeatYearly || YEARLY_TYPES.has(type),
       notes: notes.trim() || undefined,
     })
     await syncEventReminder(saved, remind !== null && remind >= 0 && !saved.startTime ? -1 : remind)
-    toast(event ? 'Event updated' : 'Event added', { emoji: '📅' })
+    toast(event ? 'Saved' : 'Added', { emoji: emoji || EVENT_EMOJI[type] })
     close()
   }
 
@@ -350,14 +348,25 @@ export function EventSheet({
           placeholder="e.g. Dentist"
         />
       </Field>
-      <ForPicker value={forId} onChange={setForId} />
+      <PeoplePicker value={people} onChange={setPeople} />
       <div className="flex flex-wrap gap-2">
         {EVENT_TYPES.map((t) => (
           <Chip key={t.value} active={type === t.value} onClick={() => setType(t.value)}>
-            {t.label}
+            {EVENT_EMOJI[t.value]} {t.label}
           </Chip>
         ))}
       </div>
+      {iconOpen ? (
+        <EmojiPicker value={emoji} onChange={setEmoji} label="Own icon" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIconOpen(true)}
+          className="justify-self-start text-xs font-semibold text-sage-ink"
+        >
+          {emoji ? `Icon ${emoji} · change` : 'Choose your own icon (optional)'}
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date">
           <Input type="date" value={localDate} onChange={(e) => setDate(e.target.value)} />
@@ -369,7 +378,7 @@ export function EventSheet({
       <Field group label="Remind me">
         <RemindPicker id="event-remind" value={remind} onChange={setRemind} hasTime={!!startTime} />
       </Field>
-      {type !== 'birthday' && (
+      {!YEARLY_TYPES.has(type) && (
         <label className="flex items-center justify-between gap-3">
           <span className="text-sm">Every year</span>
           <Toggle checked={repeatYearly} onChange={setYearly} label="Repeat every year" />
@@ -382,7 +391,6 @@ export function EventSheet({
   )
 }
 
-const AVATARS = ['🙂', '😊', '👩', '👨', '🧔', '👱‍♀️', '💑', '👵', '👴', '👧', '👦', '🧒', '👶']
 const COLORS = ['#dce9dc', '#e9dfd0', '#f0dfdf', '#e6e2f1', '#dfeaf0', '#f4ead2']
 
 /** Edit yourself, or add/edit a family member. Members live only on this phone. */
@@ -463,23 +471,7 @@ export function ProfileSheet({ profile, role: presetRole }: { profile?: Profile;
           </div>
         </Field>
       )}
-      <Field group label="Picture">
-        <div className="flex flex-wrap gap-1.5">
-          {[name.trim()[0]?.toUpperCase() ?? 'A', ...AVATARS].map((a) => (
-            <button
-              key={a}
-              type="button"
-              aria-pressed={avatar === a}
-              aria-label={`Picture ${a}`}
-              onClick={() => setAvatar(a)}
-              className={`grid size-10 place-items-center rounded-full text-lg ${avatar === a ? 'ring-2 ring-sage' : ''}`}
-              style={{ background: color }}
-            >
-              {a}
-            </button>
-          ))}
-        </div>
-      </Field>
+      <EmojiPicker value={avatar} onChange={setAvatar} label="Picture" people color={color} />
       <Field group label="Colour">
         <div className="flex flex-wrap gap-2">
           {COLORS.map((c) => (
@@ -504,23 +496,6 @@ export function ProfileSheet({ profile, role: presetRole }: { profile?: Profile;
   )
 }
 
-const REMINDER_EMOJIS = [
-  '⏰',
-  '💧',
-  '🪑',
-  '👀',
-  '⏸️',
-  '☀️',
-  '💊',
-  '📞',
-  '🍎',
-  '🚶',
-  '🌿',
-  '🔑',
-  '🧾',
-  '🌙',
-]
-
 export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
   const close = useUI((s) => s.closeSheet)
   const [title, setTitle] = useState(reminder?.title ?? '')
@@ -533,7 +508,10 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
   const [times, setTimes] = useState<string[]>(reminder?.times?.length ? reminder.times : ['09:00'])
   const [days, setDays] = useState<number[]>(reminder?.days ?? [])
   const [priority, setPriority] = useState<ReminderPriority>(reminder?.priority ?? 'normal')
-  const [forId, setForId] = useState<string | null>(reminder?.profileId ?? null)
+  const fallbackPeople = useDefaultPeople()
+  const [people, setPeople] = useState<string[]>(
+    reminder ? (reminder.profileId ? [reminder.profileId] : []) : fallbackPeople,
+  )
 
   const save = async () => {
     if (!title.trim()) return
@@ -544,7 +522,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
       emoji,
       kind,
       priority,
-      profileId: forId,
+      profileId: people[0] ?? null,
       intervalMinutes: kind === 'interval' ? intervalMinutes : undefined,
       startTime: kind === 'interval' ? startTime : undefined,
       endTime: kind === 'interval' ? endTime : undefined,
@@ -591,7 +569,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           placeholder="e.g. Take my tablet"
         />
       </Field>
-      <ForPicker value={forId} onChange={setForId} />
+      <PeoplePicker value={people} onChange={setPeople} single />
       <Field label="Message (optional)">
         <Input
           value={message}
@@ -600,22 +578,7 @@ export function ReminderSheet({ reminder }: { reminder?: Reminder }) {
           placeholder="A kind reminder…"
         />
       </Field>
-      <Field group label="Icon">
-        <div className="flex flex-wrap gap-1.5">
-          {REMINDER_EMOJIS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              aria-pressed={emoji === e}
-              aria-label={`Icon ${e}`}
-              onClick={() => setEmoji(e)}
-              className={`grid size-10 place-items-center rounded-xl text-lg ${emoji === e ? 'bg-sage-soft ring-2 ring-sage' : 'bg-surface2'}`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      </Field>
+      <EmojiPicker value={emoji} onChange={setEmoji} />
       <Segmented
         label="Schedule type"
         value={kind}

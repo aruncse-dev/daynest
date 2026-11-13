@@ -14,9 +14,23 @@ import {
   type LocalDate,
   weekOf,
 } from '@/lib/date'
-import { useMembers, usePrimaryProfile, useToday, useNow, useSetting } from '@/lib/hooks'
-import { isDueOn } from '@/lib/habits'
-import { useDayStats, useDayTasks, useEventsBetween, useHabitsForDay } from '@/lib/queries'
+import {
+  usePerson,
+  usePrimaryProfile,
+  useProfiles,
+  useToday,
+  useNow,
+  useSetting,
+} from '@/lib/hooks'
+import { displayName, groupOf, isFor, isImportantDate } from '@/lib/people'
+import { PersonBar } from '@/components/PersonBar'
+import {
+  useDayStats,
+  useDayTasks,
+  useEventsBetween,
+  useHabitsForDay,
+  usePeopleDay,
+} from '@/lib/queries'
 import {
   dayMessage,
   habitsKept,
@@ -46,6 +60,8 @@ export function Today() {
   const today = useToday()
   const now = useNow()
   const me = usePrimaryProfile()
+  const profiles = useProfiles()
+  const { person, hasFamily } = usePerson()
   const openSheet = useUI((s) => s.openSheet)
   const [picked, setPicked] = useState<LocalDate | null>(null)
   // a picked day resets once the date rolls over
@@ -54,49 +70,91 @@ export function Today() {
   const isFuture = compareLocal(day, today) > 0
   const [weekAnchor, setWeekAnchor] = useState<LocalDate | null>(null)
   const week = weekOf(weekAnchor ?? day)
+  const ids = (profiles ?? []).map((p) => p.id)
 
-  // Today is about you; family members' items live on the Family tab
-  const mine = (pid?: string | null) => !pid || pid === me?.id
-  const tasks = useDayTasks(day, { includeOverdue: isToday })?.filter((t) => mine(t.task.profileId))
-  const habits = useHabitsForDay(day)
-    ?.filter((h) => mine(h.habit.profileId))
-    .filter((h) => compareLocal(day, toLocalDate(new Date(h.habit.createdAt))) >= 0)
-  const stats = useDayStats(week, today, me?.id)
-  const dayStat = useDayStats([day], today, me?.id)?.days[0]
+  const tasks = useDayTasks(day, { includeOverdue: isToday, person })
+  const habits = useHabitsForDay(day, person)?.filter(
+    (h) => compareLocal(day, toLocalDate(new Date(h.habit.createdAt))) >= 0,
+  )
+  const stats = useDayStats(week, today, person)
+  const people = usePeopleDay(day, today, ids)
+  const dayStat = people?.[person]
   const total = (tasks?.length ?? 0) + (habits?.length ?? 0)
+  const who = profiles?.find((p) => p.id === person)
 
   const nextNudge = useLiveQuery(async () => {
-    const rs = await db.reminders.filter((r) => r.enabled).toArray()
+    const rs = await db.reminders
+      .filter((r) => r.enabled && (person === 'all' || r.profileId === person))
+      .toArray()
     return rs
       .map((r) => ({ r, at: nextSlotAfter(r, now) }))
       .filter((x): x is { r: (typeof rs)[number]; at: Date } => !!x.at)
       .sort((a, b) => a.at.getTime() - b.at.getTime())[0]
-  }, [now.getTime()])
+  }, [now.getTime(), person])
 
   const pick = (d: LocalDate) => {
     setPicked(d === today ? null : d)
     setWeekAnchor(null)
   }
+  const progress = people
+    ? Object.fromEntries(Object.entries(people).map(([k, v]) => [k, statRatio(v)]))
+    : undefined
+
+  // Everyone, with family: one section per person (shared items sit with the first person)
+  const grouped = person === 'all' && hasFamily && tasks && habits && profiles
+  const sections = grouped
+    ? [...profiles.map((p) => p.id), '']
+        .map((id) => ({
+          id,
+          profile: profiles.find((p) => p.id === id),
+          tasks: tasks.filter((t) => groupOf(t.task) === id),
+          habits: habits.filter((h) => groupOf(h.habit) === id),
+        }))
+        .filter((g) => g.tasks.length + g.habits.length > 0)
+    : []
+
+  const renderItems = (ts: NonNullable<typeof tasks>, hs: NonNullable<typeof habits>) => (
+    <>
+      {ts.map((t) => (
+        <TaskRow key={t.task.id} item={t} hideOwner={grouped ? groupOf(t.task) : person} />
+      ))}
+      {hs.length > 0 && (
+        <div className={cx('grid gap-2.5', ts.length > 0 && 'mt-2.5')}>
+          {hs.map((h) => (
+            <HabitRow
+              key={h.habit.id}
+              habit={h.habit}
+              done={h.done}
+              date={day}
+              locked={isFuture}
+              hideOwner={grouped ? groupOf(h.habit) : person}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="grid gap-3">
-      <section className="flex items-end gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {formatLocal(today, 'EEEE, d MMMM')}
-          </div>
-          <h1 className="text-[24px] font-bold leading-tight tracking-[-0.8px]">
-            {greetingFor(now)}, {me?.name ?? 'friend'}{' '}
-            <span className="inline-block anim-wiggle [animation-iteration-count:2]">👋</span>
-          </h1>
+      <section>
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+          {formatLocal(today, 'EEEE, d MMMM')}
         </div>
+        <h1 className="text-[24px] font-bold leading-tight tracking-[-0.8px]">
+          {greetingFor(now)}, {me?.name ?? 'friend'}{' '}
+          <span className="inline-block anim-wiggle [animation-iteration-count:2]">👋</span>
+        </h1>
       </section>
+
+      <PersonBar progress={isToday ? progress : undefined} />
 
       <DayHero
         stat={dayStat}
         today={today}
+        who={hasFamily ? (who ? displayName(who) : 'Everyone') : null}
         streak={stats?.streak ?? 0}
-        quote={isToday ? motivationFor(today) : null}
+        quote={isToday && person === 'all' ? motivationFor(today) : null}
       />
 
       <WeekStrip
@@ -108,12 +166,16 @@ export function Today() {
         onShift={(n) => setWeekAnchor(addLocalDays(week[0], n * 7))}
       />
 
-      {isToday && <HelperCard today={today} now={now} />}
+      {isToday && person === 'all' && <HelperCard today={today} now={now} />}
 
       <Panel>
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-[13px] font-bold">
-            {isToday ? 'Today’s list' : formatLocal(day, 'EEEE, d MMM')}
+            {isToday
+              ? who
+                ? `${displayName(who)} · today`
+                : 'Today’s list'
+              : formatLocal(day, 'EEEE, d MMM')}
           </h2>
           {isToday ? (
             <LinkButton onClick={() => openSheet({ type: 'quickAdd' })}>+ Add</LinkButton>
@@ -132,7 +194,9 @@ export function Today() {
             {isToday && (
               <>
                 <div className="text-xs text-muted">
-                  Add one or two things that would make today feel good.
+                  {who
+                    ? `Nothing for ${displayName(who)} today.`
+                    : 'Add one or two things that would make today feel good.'}
                 </div>
                 <Button size="sm" className="mt-3" onClick={() => openSheet({ type: 'quickAdd' })}>
                   + Add a to-do
@@ -140,37 +204,46 @@ export function Today() {
               </>
             )}
           </div>
+        ) : grouped ? (
+          <div className="grid gap-3">
+            {sections.map((g) => {
+              const done =
+                g.tasks.filter((t) => t.done).length + g.habits.filter((h) => h.done).length
+              const all = g.tasks.length + g.habits.length
+              return (
+                <section
+                  key={g.id || 'none'}
+                  aria-label={g.profile ? displayName(g.profile) : 'Everyone'}
+                >
+                  <div className="mb-1 flex items-center gap-2 border-b border-line-soft pb-1.5">
+                    {g.profile ? (
+                      <Avatar avatar={g.profile.avatar} color={g.profile.color} size={24} />
+                    ) : (
+                      <Avatar avatar="👪" color="var(--green2)" size={24} />
+                    )}
+                    <b className="flex-1 text-[12.5px]">
+                      {g.profile ? displayName(g.profile) : 'Everyone'}
+                    </b>
+                    <span className="text-[11px] font-semibold tabular-nums text-muted">
+                      {done}/{all}
+                    </span>
+                  </div>
+                  {renderItems(g.tasks, g.habits)}
+                </section>
+              )
+            })}
+          </div>
         ) : (
-          <>
-            {tasks.length > 0 && <SectionLabel>To-dos</SectionLabel>}
-            {tasks.map((t) => (
-              <TaskRow key={t.task.id} item={t} />
-            ))}
-            {habits.length > 0 && (
-              <SectionLabel className={tasks.length ? 'mt-3' : ''}>Habits</SectionLabel>
-            )}
-            <div className="grid gap-2.5">
-              {habits.map((h) => (
-                <HabitRow
-                  key={h.habit.id}
-                  habit={h.habit}
-                  done={h.done}
-                  date={day}
-                  locked={isFuture}
-                />
-              ))}
-            </div>
-            {!isToday && !isFuture && (
-              <p className="mt-3 text-[11px] text-muted">
-                Forgot to tick something? You can still mark it for this day.
-              </p>
-            )}
-          </>
+          renderItems(tasks, habits)
+        )}
+        {!isToday && !isFuture && total > 0 && (
+          <p className="mt-3 text-[11px] text-muted">
+            Forgot to tick something? You can still mark it for this day.
+          </p>
         )}
       </Panel>
 
-      {isToday && <ComingUp today={today} nudge={nextNudge} />}
-      <FamilyStrip today={today} />
+      {isToday && <ComingUp today={today} nudge={nextNudge} person={person} />}
     </div>
   )
 }
@@ -186,18 +259,24 @@ function SectionLabel({ children, className = '' }: { children: string; classNam
 function ComingUp({
   today,
   nudge,
+  person,
 }: {
   today: LocalDate
   nudge?: { r: { emoji: string; title: string }; at: Date }
+  person: string
 }) {
   const navigate = useNavigate()
-  const events = useEventsBetween(today, addLocalDays(today, 14))
-  if (!nudge && !events?.length) return null
+  // events in the next 2 weeks, important dates (birthdays…) a month ahead
+  const all = useEventsBetween(today, addLocalDays(today, 30))
+  const events = (all ?? [])
+    .filter((e) => isFor(e, person))
+    .filter((e) => isImportantDate(e) || compareLocal(e.occursOn, addLocalDays(today, 14)) <= 0)
+  if (!nudge && !events.length) return null
   return (
     <Panel>
       <div className="mb-1 flex items-center justify-between">
         <SectionLabel>Coming up</SectionLabel>
-        {!!events?.length && (
+        {!!events.length && (
           <LinkButton onClick={() => navigate('/plan?tab=calendar')}>Calendar</LinkButton>
         )}
       </div>
@@ -220,8 +299,14 @@ function ComingUp({
             </span>
           </button>
         )}
-        {events?.slice(0, 2).map((e) => (
-          <EventRow key={e.id + e.occursOn} event={e} date={e.occursOn} />
+        {events.slice(0, 3).map((e) => (
+          <EventRow
+            key={e.id + e.occursOn}
+            event={e}
+            date={e.occursOn}
+            hideOwner={person}
+            countdown={isImportantDate(e)}
+          />
         ))}
       </div>
     </Panel>
@@ -457,50 +542,6 @@ function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
   return null
 }
 
-/** A small link to the family's day, only when family members exist. */
-function FamilyStrip({ today }: { today: LocalDate }) {
-  const members = useMembers()
-  const navigate = useNavigate()
-  const left = useLiveQuery(async () => {
-    const ids = new Set(members.map((m) => m.id))
-    const [hs, es] = await Promise.all([
-      db.habits.toArray(),
-      db.habitEntries.where('localDate').equals(today).toArray(),
-    ])
-    const done = new Set(es.map((e) => e.habitId))
-    return hs.filter(
-      (h) => h.profileId && ids.has(h.profileId) && isDueOn(h, today) && !done.has(h.id),
-    ).length
-  }, [today, members.length])
-  if (!members.length) return null
-  return (
-    <button
-      type="button"
-      onClick={() => navigate('/family')}
-      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-3 text-left"
-    >
-      <div className="flex -space-x-2">
-        {members.slice(0, 4).map((p) => (
-          <Avatar
-            key={p.id}
-            avatar={p.avatar}
-            color={p.color}
-            size={30}
-            className="ring-2 ring-surface"
-          />
-        ))}
-      </div>
-      <span className="flex-1 text-sm">
-        <b>Family</b>
-        <span className="block text-xs text-muted">
-          {left ? `${left} habit${left > 1 ? 's' : ''} still to do today` : 'All caught up 🌼'}
-        </span>
-      </span>
-      <span className="text-muted">›</span>
-    </button>
-  )
-}
-
 /** A progress ring: one hue, light track → filled arc. */
 function Ring({
   value,
@@ -551,11 +592,14 @@ function Ring({
 function DayHero({
   stat,
   today,
+  who,
   streak,
   quote,
 }: {
   stat?: DayStat
   today: LocalDate
+  /** whose numbers: 'Everyone', 'Me', 'Mia' (null when there's no family) */
+  who: string | null
   streak: number
   quote: string | null
 }) {
@@ -591,7 +635,9 @@ function DayHero({
           </span>
         </Ring>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">{label}</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">
+            {who ? `${who} · ${label}` : label}
+          </div>
           <div className="text-[21px] font-bold leading-tight tracking-[-0.4px] tabular-nums">
             {stat ? `${statDone(stat)} of ${statTotal(stat)} done` : '…'}
           </div>

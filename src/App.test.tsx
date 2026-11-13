@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 vi.mock('virtual:pwa-register/react', () => ({
@@ -73,10 +73,15 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Quick add task' }))
     await userEvent.type(screen.getByLabelText('Task title'), 'Water the garden{enter}')
     expect(await screen.findByText('Water the garden')).toBeInTheDocument()
+    // added under Everyone: not tied to anyone
+    expect(
+      (await db.tasks.filter((t) => t.title === 'Water the garden').first())?.profileIds,
+    ).toEqual([])
 
-    // Family tab: role-based idea opens a prefilled habit for Mia with a reminder
+    // Family tab: pick Mia in the people bar, then a role-based idea opens a prefilled habit
     await userEvent.click(screen.getByRole('link', { name: /Family/ }))
-    // the first member's card opens by default
+    await screen.findByRole('heading', { level: 1, name: 'Family' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Mia' }))
     await userEvent.click(await screen.findByRole('button', { name: /Reading time/ }))
     expect(screen.getByLabelText('Reminder time 1')).toHaveValue('19:30')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -89,6 +94,17 @@ describe('App', () => {
       const r = await db.reminders.filter((x) => x.link?.id === habit!.id).first()
       expect(r?.title).toBe('Mia: Reading time')
       expect(r?.times).toEqual(['19:30'])
+    })
+
+    // a to-do for several people: starts with Mia (her page), add Me too
+    await userEvent.click(screen.getByRole('button', { name: '+ To-do' }))
+    await userEvent.type(screen.getByPlaceholderText('e.g. Call the bank'), 'Swimming kit')
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Me' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const me = await db.profiles.filter((p) => !!p.isPrimary).first()
+    await waitFor(async () => {
+      const t = await db.tasks.filter((x) => x.title === 'Swimming kit').first()
+      expect(t?.profileIds?.sort()).toEqual([mia!.id, me!.id].sort())
     })
   })
 })

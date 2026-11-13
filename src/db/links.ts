@@ -1,3 +1,4 @@
+import { EVENT_EMOJI } from '@/lib/people'
 import { db } from './db'
 import { toggleHabit, toggleTask } from './actions'
 import { uuid } from '@/lib/id'
@@ -26,20 +27,28 @@ export async function deleteLinkedReminders(type: ReminderLink['type'], id: stri
   await db.reminders.bulkDelete(rows.map((r) => r.id))
 }
 
-/** "Mia: Brush teeth" when the item belongs to a family member. */
-async function titleFor(title: string, profileId?: string | null) {
-  if (!profileId) return title
-  const p = await db.profiles.get(profileId)
-  return p && !p.isPrimary ? `${p.name}: ${title}` : title
+/** "Mia: Brush teeth" / "Mia & Leo: Swimming" when the item is for family members. */
+async function titleFor(title: string, ids: string[]) {
+  if (!ids.length) return title
+  const names = (await db.profiles.bulkGet(ids))
+    .filter((p) => p && !p.isPrimary)
+    .map((p) => p!.name)
+  if (!names.length) return title
+  const who = names.length <= 2 ? names.join(' & ') : `${names[0]} +${names.length - 1}`
+  return `${who}: ${title}`
 }
 
 async function upsertLinked(
   link: ReminderLink,
-  fields: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days' | 'profileId'> &
-    Partial<Pick<Reminder, 'priority' | 'presetKey'>>,
+  { people, ...rest }: Pick<Reminder, 'title' | 'message' | 'emoji' | 'times' | 'days'> &
+    Partial<Pick<Reminder, 'priority' | 'presetKey'>> & { people: string[] },
 ) {
   const existing = await getLinkedReminder(link.type, link.id)
-  fields = { ...fields, title: await titleFor(fields.title, fields.profileId) }
+  const fields = {
+    ...rest,
+    profileId: people[0] ?? null,
+    title: await titleFor(rest.title, people),
+  }
   const now = nowIso()
   const row: Reminder = {
     ...(existing ?? { id: uuid(), createdAt: now, priority: 'normal' as const }),
@@ -63,7 +72,7 @@ export async function syncPhoneFreeReminder(habit: Habit, phoneDownAt: string) {
     { type: 'habit', id: habit.id },
     {
       title: habit.title,
-      profileId: habit.profileId,
+      people: habit.profileId ? [habit.profileId] : [],
       emoji: '🌙',
       message: `Phone-free time at ${formatTime12(phoneDownAt)}. Time to wrap up and plug in away from bed.`,
       times: [minutesToTime((timeToMinutes(phoneDownAt) - 15 + 1440) % 1440)],
@@ -86,7 +95,7 @@ export async function syncHabitReminder(habit: Habit, times: string[]) {
     { type: 'habit', id: habit.id },
     {
       title: habit.title,
-      profileId: habit.profileId,
+      people: habit.profileId ? [habit.profileId] : [],
       emoji: habit.emoji,
       message: habit.targetLabel
         ? `${habit.targetLabel}. Tap “Mark done” when finished.`
@@ -111,7 +120,7 @@ export async function syncTaskReminder(task: Task, before: number | null) {
     { type: 'task', id: task.id, before: before! },
     {
       title: task.title,
-      profileId: task.profileId,
+      people: task.profileIds ?? [],
       emoji: '📝',
       message: task.dueTime ? `Today at ${formatTime12(task.dueTime)}.` : 'On your list for today.',
       times: [at],
@@ -123,12 +132,12 @@ export async function syncTaskReminder(task: Task, before: number | null) {
 export async function syncEventReminder(event: CalendarEvent, before: number | null) {
   const at = before === null ? null : slotFor(event.startTime, before)
   if (!at) return deleteLinkedReminders('event', event.id)
-  const emoji = event.type === 'birthday' ? '🎂' : event.type === 'appointment' ? '🩺' : '📅'
+  const emoji = event.emoji || EVENT_EMOJI[event.type] || '📅'
   await upsertLinked(
     { type: 'event', id: event.id, before: before! },
     {
       title: event.title,
-      profileId: event.profileId,
+      people: event.profileIds ?? [],
       emoji,
       message: event.startTime ? `Today at ${formatTime12(event.startTime)}.` : 'Today.',
       times: [at],
