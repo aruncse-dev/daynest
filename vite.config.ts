@@ -10,17 +10,32 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
   version: string
 }
 
+// Which build is live: Vercel provides the commit; local builds say "local"
+const BUILD_ID = (process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)
+const BUILD_TIME = new Date().toISOString()
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    // Which build is live: Vercel provides the commit; local builds say "local"
-    __BUILD_ID__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA ?? 'local').slice(0, 7)),
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
   },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   plugins: [
+    // /version.json: what's deployed now. The app compares it with itself to spot an old copy.
+    // Never cached by the service worker (json isn't in the precache patterns).
+    {
+      name: 'daynest-version-json',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ version: pkg.version, build: BUILD_ID, time: BUILD_TIME }),
+        })
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

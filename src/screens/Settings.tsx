@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { db, SCHEMA_VERSION } from '@/db/db'
 import { clearAllData, setSetting } from '@/db/actions'
 import { SETTING_ONBOARDED } from '@/db/keys'
@@ -28,6 +28,7 @@ import {
   Toggle,
 } from '@/components/ui'
 import { CloudCard } from '@/components/CloudCard'
+import { useAppUpdate } from '@/lib/appUpdate'
 import { Tour } from '@/components/Tour'
 import { setPhoneFree } from '@/db/phoneFree'
 import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
@@ -136,6 +137,8 @@ export function Settings() {
         <StorageLine />
       </details>
 
+      <UpdateRow />
+
       <div className="flex items-center justify-between gap-3 px-1">
         <span className="text-[11px] text-muted">
           DayNest {__APP_VERSION__} · data v{SCHEMA_VERSION}
@@ -158,6 +161,27 @@ export function Settings() {
 
       {tour && <Tour onClose={() => setTour(false)} />}
     </div>
+  )
+}
+
+/** Shown when this phone runs an older DayNest than the one deployed. */
+function UpdateRow() {
+  const { available, latest, apply } = useAppUpdate()
+  if (!available) return null
+  return (
+    <section className="flex items-center gap-3 rounded-[18px] border border-amber-ink/30 bg-amber-soft px-3.5 py-3 text-sm">
+      <RefreshCw size={18} className="shrink-0 text-amber-ink" />
+      <span className="flex-1">
+        <b>Update available</b>
+        <small className="block text-[11px] text-muted">
+          You have build {__BUILD_ID__}
+          {latest ? `; the latest is ${latest}` : ''}. Updating keeps your data.
+        </small>
+      </span>
+      <Button size="sm" onClick={() => apply?.()}>
+        Update
+      </Button>
+    </section>
   )
 }
 
