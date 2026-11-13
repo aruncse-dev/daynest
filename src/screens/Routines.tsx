@@ -5,6 +5,7 @@ import { saveReminder } from '@/db/actions'
 import type { Habit, Profile, Reminder } from '@/db/types'
 import { currentStreak, isDueOn } from '@/lib/habits'
 import { describeSchedule } from '@/lib/reminders'
+import { formatTime12 } from '@/lib/date'
 import { usePerson, useProfiles, useSetting, useToday } from '@/lib/hooks'
 import { PersonGroup } from '@/components/DayList'
 import { isFor } from '@/lib/people'
@@ -13,16 +14,39 @@ import { useUI } from '@/store/ui'
 import { LinkButton, Panel, Skeleton, Tag, Toggle, cx } from '@/components/ui'
 import { HabitRow } from '@/components/rows'
 import { AlwaysOnCard } from '@/components/AlwaysOnCard'
+import { TabBar, useTab } from '@/components/Tabs'
 import { pushConfigured, PUSH_ENABLED_KEY } from '@/lib/push'
 
+const TABS = ['habits', 'reminders'] as const
+
 export function Routines() {
+  const [tab, setTab] = useTab(TABS, 'habits')
   return (
     <div className="grid gap-3">
       <h1 className="text-[24px] font-bold tracking-[-0.8px]">Routines</h1>
       <PersonBar />
-      <HabitsSection />
-      <NudgesSection />
+      <TabBar
+        label="Routines"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'habits', label: 'Habits', emoji: '🌱' },
+          { value: 'reminders', label: 'Reminders', emoji: '🔔' },
+        ]}
+      />
+      {tab === 'habits' ? <HabitsSection /> : <RemindersTab />}
     </div>
+  )
+}
+
+/** Stand-alone reminders, plus every reminder that rides on a habit, to-do or event. */
+function RemindersTab() {
+  return (
+    <>
+      <AlwaysOnCard />
+      <NudgesSection />
+      <LinkedSection />
+    </>
   )
 }
 
@@ -175,7 +199,73 @@ function HabitList({
   )
 }
 
-/* ---------------- Nudges ---------------- */
+/* ---------------- Reminders ---------------- */
+
+const LINK_LABEL = { habit: 'Habit', task: 'To-do', event: 'Event' } as const
+
+/** Reminders attached to habits, to-dos and events. Edited on the item itself. */
+function LinkedSection() {
+  const { person } = usePerson()
+  const openSheet = useUI((s) => s.openSheet)
+  const rows = useLiveQuery(async () => {
+    const linked = await db.reminders.filter((r) => !!r.link).toArray()
+    const out: { r: Reminder; open: () => void }[] = []
+    for (const r of linked) {
+      const { type, id } = r.link!
+      if (type === 'habit') {
+        const habit = await db.habits.get(id)
+        if (habit && habit.status !== 'archived' && isFor(habit, person))
+          out.push({ r, open: () => openSheet({ type: 'habit', habit }) })
+      } else if (type === 'task') {
+        const task = await db.tasks.get(id)
+        if (task && task.status !== 'archived' && isFor(task, person))
+          out.push({ r, open: () => openSheet({ type: 'task', task }) })
+      } else {
+        const event = await db.events.get(id)
+        if (event && isFor(event, person))
+          out.push({ r, open: () => openSheet({ type: 'event', event }) })
+      }
+    }
+    return out.sort(
+      (a, b) =>
+        (a.r.times?.[0] ?? '99').localeCompare(b.r.times?.[0] ?? '99') ||
+        a.r.title.localeCompare(b.r.title),
+    )
+  }, [person])
+  if (!rows?.length) return null
+  return (
+    <section>
+      <SectionHead title="On habits, to-dos & events" />
+      <Panel className="!py-1.5">
+        {rows.map(({ r, open }) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={open}
+            className="flex w-full items-center gap-3 border-b border-line-soft py-2 text-left last:border-0"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface2 text-lg">
+              {r.emoji}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13.5px] font-semibold">{r.title}</span>
+              <span className="block truncate text-[11px] text-muted">
+                {LINK_LABEL[r.link!.type]} · {(r.times ?? []).map(formatTime12).join(', ')}
+                {r.link!.type === 'habit' ? ' on its days' : ' on the day'}
+              </span>
+            </span>
+            <ChevronRight size={16} className="shrink-0 text-muted" />
+          </button>
+        ))}
+      </Panel>
+      <p className="mt-2 px-1 text-[11px] text-muted">
+        These only ring when the item is due and not done yet. Change them on the item.
+      </p>
+    </section>
+  )
+}
+
+/* ---------------- Stand-alone reminders ---------------- */
 
 function NudgesSection() {
   const alwaysOn = useSetting(PUSH_ENABLED_KEY, false)
@@ -193,10 +283,9 @@ function NudgesSection() {
   return (
     <section>
       <SectionHead
-        title="My reminders"
+        title="Reminders"
         action={<LinkButton onClick={() => openSheet({ type: 'addNudge' })}>+ Add</LinkButton>}
       />
-      <AlwaysOnCard />
       <Panel className="!py-1.5">
         {list.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted">

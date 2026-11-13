@@ -266,7 +266,7 @@ function ComingUp({
         {nudge && (
           <button
             type="button"
-            onClick={() => navigate('/routines')}
+            onClick={() => navigate('/routines?tab=reminders')}
             className="flex items-center gap-3 text-left"
           >
             <span className="grid size-11 place-items-center rounded-[10px] bg-sage-soft text-xl">

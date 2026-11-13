@@ -1,5 +1,5 @@
 import type { Reminder } from '@/db/types'
-import { addLocalDays, timeToMinutes, toLocalDate, weekdayOf } from './date'
+import { addLocalDays, formatTime12, timeToMinutes, toLocalDate, weekdayOf } from './date'
 
 /** Slots older than this when the app wakes up are skipped rather than spammed. */
 export const CATCH_UP_WINDOW_MS = 10 * 60 * 1000
@@ -81,8 +81,8 @@ export function describeSchedule(r: Reminder): string {
             .filter((d) => r.days.includes(d))
             .map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d])
             .join(', ')
-  if (r.kind === 'times') return `${(r.times ?? []).join(', ')} · ${days}`
+  if (r.kind === 'times') return `${(r.times ?? []).map(formatTime12).join(', ')} · ${days}`
   const every = r.intervalMinutes ?? 60
   const label = every % 60 === 0 ? `${every / 60}h` : `${every} min`
-  return `Every ${label}, ${r.startTime}–${r.endTime} · ${days}`
+  return `Every ${label}, ${formatTime12(r.startTime)}–${formatTime12(r.endTime)} · ${days}`
 }
