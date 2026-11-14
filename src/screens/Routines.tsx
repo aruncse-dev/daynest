@@ -23,7 +23,7 @@ export function Routines() {
   const [tab, setTab] = useTab(TABS, 'habits')
   return (
     <div className="grid gap-3">
-      <h1 className="text-[24px] font-bold tracking-[-0.8px]">Routines</h1>
+      <h1 className="text-[24px] font-bold tracking-[-0.3px]">Routines</h1>
       <PersonBar />
       <TabBar
         label="Routines"

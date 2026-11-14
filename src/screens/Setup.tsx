@@ -349,7 +349,7 @@ function StepShell({
       <div className="mb-3 inline-block py-1 text-4xl leading-none anim-wiggle [animation-iteration-count:1]">
         {emoji}
       </div>
-      <h1 className="text-[26px] font-bold leading-tight tracking-[-1px]">{title}</h1>
+      <h1 className="text-[26px] font-bold leading-tight tracking-[-0.2px]">{title}</h1>
       <p className="mb-5 mt-1 text-sm text-muted">{sub}</p>
       {children}
     </div>
@@ -366,7 +366,7 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
           alt=""
           className="mx-auto mb-5 size-20 rounded-[26px] shadow-[0_14px_34px_#47765b44] anim-hop [animation-iteration-count:2]"
         />
-        <h1 className="text-[34px] font-bold leading-tight tracking-[-1.3px]">
+        <h1 className="text-[34px] font-bold leading-tight tracking-[-0.6px]">
           Welcome to <span className="shimmer-text">DayNest</span>
         </h1>
         <p className="mt-2 text-muted">Your day, habits and family. 🌿</p>

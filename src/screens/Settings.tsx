@@ -64,7 +64,7 @@ export function Settings() {
         <IconButton label="Back" onClick={() => navigate(-1)}>
           <ArrowLeft size={18} />
         </IconButton>
-        <h1 className="text-[24px] font-bold tracking-[-0.8px]">Settings</h1>
+        <h1 className="text-[24px] font-bold tracking-[-0.3px]">Settings</h1>
       </div>
 
       <UpdateRow />

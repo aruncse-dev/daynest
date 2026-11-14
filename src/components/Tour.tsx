@@ -317,7 +317,7 @@ export function Tour({
             onClick={() => setI((x) => Math.min(SCENES.length - 1, x + 1))}
           />
           <div key={i} className="animate-rise">
-            <h2 className="text-[28px] font-bold leading-tight tracking-[-1px]">{title}</h2>
+            <h2 className="text-[28px] font-bold leading-tight tracking-[-0.2px]">{title}</h2>
             <p className="mt-2 text-white/80">{sub}</p>
             <div className="mt-6 flex justify-center">
               <Body />

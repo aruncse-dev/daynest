@@ -123,7 +123,7 @@ export function Today() {
         <div className="text-xs font-semibold uppercase tracking-wide text-muted">
           {formatLocal(today, 'EEEE, d MMMM')}
         </div>
-        <h1 className="text-[24px] font-bold leading-tight tracking-[-0.8px]">
+        <h1 className="text-[24px] font-bold leading-tight tracking-[-0.3px]">
           {greetingFor(now)}, {me?.name ?? 'friend'}{' '}
           <span className="inline-block anim-wiggle [animation-iteration-count:2]">👋</span>
         </h1>
@@ -620,7 +620,7 @@ function DayHero({
           <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">
             {who ? `${who} · ${label}` : label}
           </div>
-          <div className="text-[21px] font-bold leading-tight tracking-[-0.4px] tabular-nums">
+          <div className="text-[21px] font-bold leading-tight tracking-[-0.2px] tabular-nums">
             {stat ? `${statDone(stat)} of ${statTotal(stat)} done` : '…'}
           </div>
           <div className="mt-0.5 text-[12.5px] opacity-90">{stat && dayMessage(stat, today)}</div>

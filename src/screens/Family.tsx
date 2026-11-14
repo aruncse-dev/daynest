@@ -26,7 +26,7 @@ export function Family() {
   const selected = profiles?.find((p) => p.id === person)
   return (
     <div className="grid gap-3">
-      <h1 className="text-[24px] font-bold tracking-[-0.8px]">Family</h1>
+      <h1 className="text-[24px] font-bold tracking-[-0.3px]">Family</h1>
       <PersonBar always />
       {selected ? <PersonPage profile={selected} /> : <Overview />}
       <p className="px-1 text-center text-[11px] text-muted">

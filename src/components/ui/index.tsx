@@ -71,7 +71,7 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 className="mt-1 text-[clamp(26px,5vw,34px)] font-bold leading-tight tracking-[-1.2px]">
+        <h1 className="mt-1 text-[clamp(26px,5vw,34px)] font-bold leading-tight tracking-[-0.5px]">
           {title}
         </h1>
         {sub && <div className="mt-1.5 text-sm text-muted">{sub}</div>}
