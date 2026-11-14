@@ -14,7 +14,7 @@ import {
   unlockCloud,
 } from '@/lib/cloud/cloud'
 import { toast } from '@/store/ui'
-import { Button, ConfirmButton, Field, Input, Sheet, Toggle, cx } from './ui'
+import { Button, Field, Input, Sheet, Toggle, cx } from './ui'
 
 // eslint-disable-next-line react-refresh/only-export-components -- small hook used with these components
 export function useCloud() {
@@ -37,8 +37,76 @@ function ago(iso: string | null) {
     : new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
+export type StorageMode = 'device' | 'google'
+
 /**
- * Settings: the encrypted family copy in the user's own Google Sheet.
+ * Where DayNest keeps the data: only this phone, or this phone + an encrypted copy in the
+ * user's own Google Drive. Used in setup and in Settings.
+ */
+export function StorageChoice({
+  value,
+  onPick,
+}: {
+  value: StorageMode
+  onPick: (v: StorageMode) => void
+}) {
+  const options: { v: StorageMode; icon: string; title: string; text: string; note?: string }[] = [
+    {
+      v: 'device',
+      icon: '📱',
+      title: 'Only on this phone',
+      text: 'Private and works offline. No account. Keep a backup file now and then.',
+    },
+    {
+      v: 'google',
+      icon: '☁️',
+      title: 'This phone + your Google Drive',
+      text: 'An encrypted copy in your own Google Sheet: safe if the phone is lost or reset, and usable on more phones with your Google account.',
+      note: "Sharing with family members' own phones: coming next",
+    },
+  ]
+  return (
+    <div role="radiogroup" aria-label="Where to keep your data" className="grid gap-2">
+      {options.map((o) => {
+        const on = value === o.v
+        return (
+          <button
+            key={o.v}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onPick(o.v)}
+            className={cx(
+              'flex items-start gap-3 rounded-[16px] border p-3 text-left transition active:scale-[.99]',
+              on ? 'border-sage bg-sage-soft ring-1 ring-sage' : 'border-line bg-surface',
+            )}
+          >
+            <span className="text-2xl leading-none">{o.icon}</span>
+            <span className="min-w-0 flex-1">
+              <b className="block text-[14px]">{o.title}</b>
+              <span className="block text-xs text-muted">{o.text}</span>
+              {o.note && (
+                <span className="mt-1 block text-[11px] font-semibold text-sage-ink">{o.note}</span>
+              )}
+            </span>
+            <span
+              aria-hidden
+              className={cx(
+                'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2',
+                on ? 'border-sage' : 'border-line',
+              )}
+            >
+              {on && <span className="size-2.5 rounded-full bg-sage" />}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Settings: where the data lives. Google = the encrypted family copy in the user's own Sheet.
  * Hidden until the app has a Google sign-in ID.
  */
 export function CloudCard() {
@@ -47,94 +115,99 @@ export function CloudCard() {
   const [flow, setFlow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
+  const [confirmOff, setConfirmOff] = useState(false)
   if (!googleConfigured()) return null
-  // the setup window stays open while the card switches to "on" (it still has the key code to show)
-  const flowSheet = flow && <CloudFlow onClose={() => setFlow(false)} />
 
-  const body = !on ? (
-    <section className="rounded-[18px] border border-sage-line bg-sage-soft px-3.5 py-3">
-      <div className="flex items-start gap-3">
-        <Cloud size={20} className="mt-0.5 shrink-0 text-sage-ink" />
-        <div className="min-w-0 flex-1 text-sm">
-          <b>Family copy in your Google Sheet</b>
-          <p className="mt-0.5 text-xs text-muted">
-            Locked on this phone with a family key before it leaves, so Google sees only gibberish.
-            Use it on a new phone or share it with family. No DayNest server.
-          </p>
-          <Button size="sm" className="mt-2.5" onClick={() => setFlow(true)}>
-            Turn on with Google
-          </Button>
-        </div>
-      </div>
-    </section>
-  ) : (
-    <section className="overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
-      <div className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
-        <Cloud size={18} className="shrink-0 text-sage-ink" />
-        <span className="flex-1">
-          Family copy · Google Sheet
-          <small className={cx('block text-[11px]', error ? 'text-amber-ink' : 'text-muted')}>
-            {error ? `Not synced: ${error}` : `Synced ${ago(last)} · end-to-end encrypted`}
-          </small>
-        </span>
-        <Button
-          size="sm"
-          variant="soft"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true)
-            try {
-              const r = await syncCloud(true)
-              toast(
-                r?.pulled ? `Synced · ${r.pulled} change${r.pulled > 1 ? 's' : ''} in` : 'Synced',
-                {
-                  emoji: '☁️',
-                },
-              )
-            } catch (e) {
-              toast(errText(e), { emoji: '⚠️' })
-            } finally {
-              setBusy(false)
-            }
-          }}
-        >
-          <RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> Sync
-        </Button>
-      </div>
-      <div className="px-3.5 py-2.5 text-sm">
-        <div className="flex items-center gap-3">
-          <span className="flex-1">
-            Family key code
-            <small className="block text-[11px] text-muted">
-              Needed on a new phone. Keep it written down; nobody can reset it.
-            </small>
-          </span>
-          <Button size="sm" variant="outline" onClick={() => setShow(!show)}>
-            <Eye size={14} /> {show ? 'Hide' : 'Show'}
-          </Button>
-        </div>
-        {show && code && <KeyCodeBox code={code} />}
-      </div>
-      <div className="flex items-center justify-between px-3.5 py-2.5">
-        <span className="text-[11px] text-muted">The Sheet stays in your Google Drive.</span>
-        <ConfirmButton
-          className="!min-h-9 !px-3 !text-xs"
-          confirmText="Stop on this phone?"
-          onConfirm={async () => {
-            await turnOffCloud()
-            toast('Family copy turned off on this phone', { emoji: '☁️' })
-          }}
-        >
-          <CloudOff size={14} /> Turn off
-        </ConfirmButton>
-      </div>
-    </section>
-  )
+  const pick = (v: StorageMode) => {
+    if (v === 'google' && !on) setFlow(true)
+    setConfirmOff(v === 'device' && on)
+  }
+
   return (
-    <>
-      {body}
-      {flowSheet}
-    </>
+    <section>
+      <h2 className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
+        Where your data lives
+      </h2>
+      <StorageChoice value={on && !confirmOff ? 'google' : 'device'} onPick={pick} />
+
+      {confirmOff && (
+        <div className="mt-2 rounded-[16px] border border-amber-ink/30 bg-amber-soft p-3 text-sm">
+          <b>Keep data only on this phone?</b>
+          <p className="text-xs text-muted">
+            This phone stops syncing. Your data stays here, and the Sheet stays in your Google Drive
+            for your other phones.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setConfirmOff(false)}>
+              Keep Google
+            </Button>
+            <Button
+              size="sm"
+              onClick={async () => {
+                await turnOffCloud()
+                setConfirmOff(false)
+                toast('Now kept only on this phone', { emoji: '📱' })
+              }}
+            >
+              <CloudOff size={14} /> Only this phone
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {on && (
+        <div className="mt-2 overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
+          <div className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
+            <Cloud size={18} className="shrink-0 text-sage-ink" />
+            <span className="flex-1">
+              Google Sheet sync
+              <small className={cx('block text-[11px]', error ? 'text-amber-ink' : 'text-muted')}>
+                {error ? `Not synced: ${error}` : `Synced ${ago(last)} · end-to-end encrypted`}
+              </small>
+            </span>
+            <Button
+              size="sm"
+              variant="soft"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  const r = await syncCloud(true)
+                  toast(
+                    r?.pulled
+                      ? `Synced · ${r.pulled} change${r.pulled > 1 ? 's' : ''} in`
+                      : 'Synced',
+                    { emoji: '☁️' },
+                  )
+                } catch (e) {
+                  toast(errText(e), { emoji: '⚠️' })
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              <RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> Sync
+            </Button>
+          </div>
+          <div className="px-3.5 py-2.5 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex-1">
+                Family key code
+                <small className="block text-[11px] text-muted">
+                  Needed on a new phone. Keep it written down; nobody can reset it.
+                </small>
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setShow(!show)}>
+                <Eye size={14} /> {show ? 'Hide' : 'Show'}
+              </Button>
+            </div>
+            {show && code && <KeyCodeBox code={code} />}
+          </div>
+        </div>
+      )}
+      {/* stays mounted while the card switches to "on": it still has the key code to show */}
+      {flow && <CloudFlow onClose={() => setFlow(false)} />}
+    </section>
   )
 }
 

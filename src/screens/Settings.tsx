@@ -80,6 +80,8 @@ export function Settings() {
         </Row>
       </Group>
 
+      <CloudCard />
+
       <Group>
         <div className="px-3.5 py-3">
           <div className="mb-2 text-sm">Theme</div>
@@ -105,8 +107,6 @@ export function Settings() {
       </Group>
 
       <PhoneFreeGroup />
-
-      <CloudCard />
 
       <BackupGroup />
 

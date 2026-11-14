@@ -1,4 +1,5 @@
-import { CloudFlow } from '@/components/CloudCard'
+import { CloudFlow, StorageChoice, type StorageMode } from '@/components/CloudCard'
+import { CLOUD_SHEET } from '@/lib/cloud/cloud'
 import { googleConfigured } from '@/lib/cloud/google'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -46,6 +47,11 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const members = useMembers()
   const [drafts, setDrafts] = useState<{ name: string; role: FamilyRole }[]>([])
   const [created, setCreated] = useState(0)
+  // first setup only: ask where the data should live (when Google sign-in is available)
+  const cloudOn = useSetting<string | null>(CLOUD_SHEET, null)
+  const askStorage = onboarding && googleConfigured() && !cloudOn
+  const [storage, setStorage] = useState<StorageMode>('device')
+  const [cloud, setCloud] = useState(false)
 
   const answers: SetupAnswers = { areas, wake, phoneFreeAt: phoneFree ? phoneFreeAt : null }
   const suggestions = suggest(answers) // cheap and pure
@@ -298,9 +304,24 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                 <p className="mt-2 text-muted">
                   {created} habits, reminders and to-dos are ready. Change anything, anytime.
                 </p>
-                <Button className="mt-8 w-full" onClick={enterApp}>
-                  Let's go 🌿
+                {askStorage && (
+                  <div className="mt-6 text-left">
+                    <div className="mb-2 text-center text-sm font-bold">
+                      Where should DayNest keep your data?
+                    </div>
+                    <StorageChoice value={storage} onPick={setStorage} />
+                    <p className="mt-2 text-center text-[11px] text-muted">
+                      You can change this anytime in Settings.
+                    </p>
+                  </div>
+                )}
+                <Button
+                  className="mt-6 w-full"
+                  onClick={() => (askStorage && storage === 'google' ? setCloud(true) : enterApp())}
+                >
+                  {askStorage && storage === 'google' ? 'Continue with Google' : "Let's go 🌿"}
                 </Button>
+                {cloud && <CloudFlow onClose={() => void enterApp()} />}
               </div>
             </div>
           )}
