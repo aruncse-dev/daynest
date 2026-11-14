@@ -53,7 +53,7 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-[var(--nav)] backdrop-blur-xl"
       >
         <div className="mx-auto flex max-w-[480px] justify-around px-2 pb-safe pt-1.5">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, label, icon: Icon, active: ActiveIcon }) => (
             <NavLink
               key={to}
               to={to}
@@ -73,7 +73,7 @@ export function AppShell() {
                       isActive && 'bg-sage-soft',
                     )}
                   >
-                    <Icon size={20} strokeWidth={isActive ? 2.4 : 2} />
+                    {isActive ? <ActiveIcon size={22} /> : <Icon size={22} />}
                   </span>
                   {label}
                 </>

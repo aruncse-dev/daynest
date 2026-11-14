@@ -1,6 +1,7 @@
 import { CloudFlow } from '@/components/CloudCard'
 import { googleConfigured } from '@/lib/cloud/google'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { IconCloud, IconPhone, IconPlay } from '@/components/icons'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { setSetting } from '@/db/actions'
@@ -373,22 +374,26 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
 
         <div className="mt-7 grid gap-2.5 text-left">
           <ModeButton
-            icon="📱"
+            icon={<IconPhone />}
             title="Phone mode"
             points={['Just this phone', 'No sign-in']}
             onClick={onStart}
           />
           {googleConfigured() && (
             <ModeButton
-              icon="☁️"
+              icon={<IconCloud />}
               title="Google mode"
               points={['Sign in with Google', 'Encrypted backup', 'More phones']}
               onClick={() => setGoogle(true)}
             />
           )}
         </div>
-        <button type="button" onClick={onTour} className="mt-4 text-sm font-semibold text-sage-ink">
-          ▶️ 30-second tour
+        <button
+          type="button"
+          onClick={onTour}
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-sage-ink"
+        >
+          <IconPlay className="text-lg" /> 30-second tour
         </button>
         {googleConfigured() && (
           <p className="mt-1 text-[11px] text-muted">Change mode anytime in Settings</p>
@@ -412,7 +417,7 @@ function ModeButton({
   points,
   onClick,
 }: {
-  icon: string
+  icon: ReactNode
   title: string
   points: string[]
   onClick: () => void
@@ -423,7 +428,12 @@ function ModeButton({
       onClick={onClick}
       className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-3.5 text-left shadow-sm transition active:scale-[.98]"
     >
-      <span className="text-3xl leading-none">{icon}</span>
+      <span
+        aria-hidden
+        className="grid size-12 shrink-0 place-items-center rounded-2xl bg-sage-soft text-[26px] text-sage-ink"
+      >
+        {icon}
+      </span>
       <span className="min-w-0 flex-1">
         <b className="block text-[16px]">{title}</b>
         <span className="block text-xs text-muted">{points.join(' · ')}</span>

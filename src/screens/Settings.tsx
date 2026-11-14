@@ -28,6 +28,23 @@ import {
   Toggle,
 } from '@/components/ui'
 import { CloudCard } from '@/components/CloudCard'
+import {
+  IconAuto,
+  IconBackup,
+  IconCloud,
+  IconDark,
+  IconLight,
+  IconLook,
+  IconMore,
+  IconNight,
+  IconNoServer,
+  IconPhone,
+  IconPlay,
+  IconPrivacy,
+  IconSound,
+  IconSuggest,
+  IconWarning,
+} from '@/components/icons'
 import { useAppUpdate } from '@/lib/appUpdate'
 import { Tour } from '@/components/Tour'
 import { setPhoneFree } from '@/db/phoneFree'
@@ -83,19 +100,19 @@ export function Settings() {
 
       <Group>
         <NavRow
-          icon="🎨"
+          icon={<IconLook />}
           title="Look & sound"
           sub={`${theme === 'system' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light'} · chime ${sound ? 'on' : 'off'}`}
           onClick={() => setPanel('look')}
         />
         <NavRow
-          icon="🌙"
+          icon={<IconNight />}
           title="Phone-free nights"
           sub={quiet.enabled ? `${formatShort(quiet.start)} – ${formatShort(quiet.end)}` : 'Off'}
           onClick={() => setPanel('night')}
         />
         <NavRow
-          icon="💾"
+          icon={<IconBackup />}
           title="Backup file"
           sub={
             lastBackup
@@ -105,7 +122,7 @@ export function Settings() {
           onClick={() => setPanel('backup')}
         />
         <NavRow
-          icon="ℹ️"
+          icon={<IconMore />}
           title="More"
           sub="Tour · Privacy · Erase"
           onClick={() => setPanel('more')}
@@ -123,13 +140,13 @@ export function Settings() {
             value={theme}
             onChange={(v) => setSetting('theme', v)}
             options={[
-              { value: 'light', label: '☀️ Light' },
-              { value: 'dark', label: '🌙 Dark' },
-              { value: 'system', label: 'Auto' },
+              { value: 'light', label: <IconLabel icon={<IconLight />} text="Light" /> },
+              { value: 'dark', label: <IconLabel icon={<IconDark />} text="Dark" /> },
+              { value: 'system', label: <IconLabel icon={<IconAuto />} text="Auto" /> },
             ]}
           />
           <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
-            <span>🔔 Chime on reminders</span>
+            <IconLabel icon={<IconSound />} text="Chime on reminders" />
             <Toggle
               checked={sound}
               onChange={(v) => setSetting('reminderSound', v)}
@@ -160,21 +177,36 @@ export function Settings() {
                 setTour(true)
               }}
             >
-              <span className="flex-1">▶️ 30-second tour</span>
+              <IconPlay className="text-xl text-sage-ink" />
+              <span className="flex-1">30-second tour</span>
               <ChevronRight size={18} className="text-muted" />
             </Row>
             <Row onClick={() => navigate('/setup')}>
-              <span className="flex-1">🪄 Suggestions again</span>
+              <IconSuggest className="text-xl text-sage-ink" />
+              <span className="flex-1">Suggestions again</span>
               <ChevronRight size={18} className="text-muted" />
             </Row>
           </Group>
           <div className="rounded-[18px] border border-line bg-surface px-3.5 py-3 text-sm">
-            <b>🔒 Privacy</b>
-            <ul className="mt-1.5 grid gap-1 text-xs text-muted">
-              <li>📱 Saved on this phone</li>
-              <li>☁️ Google mode: encrypted in your own Drive</li>
-              <li>🚫 No ads, no tracking, no DayNest server</li>
-              <li>⚠️ Clearing browser data erases it: keep a backup</li>
+            <b className="flex items-center gap-1.5">
+              <IconPrivacy className="text-lg text-sage-ink" /> Privacy
+            </b>
+            <ul className="mt-1.5 grid gap-1.5 text-xs text-muted">
+              <li>
+                <IconLabel icon={<IconPhone />} text="Saved on this phone" />
+              </li>
+              <li>
+                <IconLabel icon={<IconCloud />} text="Google mode: encrypted in your own Drive" />
+              </li>
+              <li>
+                <IconLabel icon={<IconNoServer />} text="No ads, no tracking, no DayNest server" />
+              </li>
+              <li>
+                <IconLabel
+                  icon={<IconWarning />}
+                  text="Clearing browser data erases it: keep a backup"
+                />
+              </li>
             </ul>
             <StorageLine />
           </div>
@@ -203,20 +235,37 @@ export function Settings() {
   )
 }
 
+/** Icon + words on one line. */
+function IconLabel({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span aria-hidden className="text-[17px] leading-none">
+        {icon}
+      </span>
+      {text}
+    </span>
+  )
+}
+
 function NavRow({
   icon,
   title,
   sub,
   onClick,
 }: {
-  icon: string
+  icon: ReactNode
   title: string
   sub: string
   onClick: () => void
 }) {
   return (
     <Row onClick={onClick}>
-      <span className="text-xl leading-none">{icon}</span>
+      <span
+        aria-hidden
+        className="grid size-9 shrink-0 place-items-center rounded-xl bg-sage-soft text-[20px] text-sage-ink"
+      >
+        {icon}
+      </span>
       <span className="min-w-0 flex-1">
         {title}
         <small className="block truncate text-[11px] text-muted">{sub}</small>

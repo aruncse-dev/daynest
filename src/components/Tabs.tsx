@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { cx } from './ui'
 
@@ -27,7 +28,7 @@ export function TabBar<T extends string>({
 }: {
   value: T
   onChange: (t: T) => void
-  tabs: { value: T; label: string; emoji?: string; badge?: number }[]
+  tabs: { value: T; label: string; emoji?: string; icon?: ReactNode; badge?: number }[]
   label: string
 }) {
   return (
@@ -45,6 +46,11 @@ export function TabBar<T extends string>({
               value === t.value ? 'bg-surface text-ink shadow-sm' : 'text-muted',
             )}
           >
+            {t.icon && (
+              <span aria-hidden className="text-[18px]">
+                {t.icon}
+              </span>
+            )}
             {t.emoji && <span aria-hidden>{t.emoji}</span>}
             {t.label}
             {!!t.badge && (

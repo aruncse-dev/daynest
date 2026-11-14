@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
 import { usePerson, useProfiles } from '@/lib/hooks'
 import { displayName } from '@/lib/people'
 import { useUI } from '@/store/ui'
 import { Avatar, cx } from './ui'
+import { IconEveryone } from './icons'
 
 /**
  * Everyone · Me · Priya · Mia · ＋ — switches every tab to one person, or the whole family.
@@ -36,8 +37,18 @@ export function PersonBar({
   const compact = profiles.length > 4
 
   const items = [
-    { id: 'all', label: 'Everyone', avatar: '👪', color: 'var(--green2)' },
-    ...profiles.map((p) => ({ id: p.id, label: displayName(p), avatar: p.avatar, color: p.color })),
+    {
+      id: 'all',
+      label: 'Everyone',
+      avatar: (<IconEveryone className="text-[17px] text-sage-ink" />) as ReactNode,
+      color: 'var(--green2)',
+    },
+    ...profiles.map((p) => ({
+      id: p.id,
+      label: displayName(p),
+      avatar: p.avatar as ReactNode,
+      color: p.color,
+    })),
   ]
   return (
     <nav

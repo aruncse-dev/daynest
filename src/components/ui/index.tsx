@@ -148,7 +148,8 @@ export function Avatar({
   size = 34,
   className,
 }: {
-  avatar: string
+  /** emoji, initial, or an icon */
+  avatar: ReactNode
   color?: string
   size?: number
   className?: string

@@ -1,5 +1,23 @@
-import { useEffect, useState } from 'react'
-import { Cloud, CloudOff, Copy, Eye, EyeOff, RefreshCw } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import {
+  IconBackup,
+  IconCloud,
+  IconCloudDone,
+  IconCloudOff,
+  IconCopy,
+  IconDevices,
+  IconFile,
+  IconHide,
+  IconKey,
+  IconLock,
+  IconNoServer,
+  IconPassword,
+  IconPhone,
+  IconRestore,
+  IconShow,
+  IconSync,
+  IconWarning,
+} from './icons'
 import { localChanges } from '@/db/db'
 import { useNow, useSetting } from '@/lib/hooks'
 import { googleConfigured } from '@/lib/cloud/google'
@@ -48,16 +66,27 @@ function ago(iso: string | null) {
 }
 
 /** Short icon points instead of sentences. */
-function Points({ items, column }: { items: string[]; column?: boolean }) {
+type Point = [icon: ReactNode, text: string]
+
+/** Short icon points instead of sentences. */
+function Points({ items, column }: { items: Point[]; column?: boolean }) {
   return (
     <ul
       className={cx(
         'text-[11.5px] text-muted',
-        column ? 'grid gap-1.5 text-[13px] text-ink' : 'flex flex-wrap gap-x-2.5 gap-y-0.5',
+        column ? 'grid gap-2 text-[13.5px] text-ink' : 'flex flex-wrap gap-x-3 gap-y-0.5',
       )}
     >
-      {items.map((i) => (
-        <li key={i}>{i}</li>
+      {items.map(([icon, text]) => (
+        <li key={text} className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className={cx('leading-none text-sage-ink', column ? 'text-[19px]' : 'text-[14px]')}
+          >
+            {icon}
+          </span>
+          {text}
+        </li>
       ))}
     </ul>
   )
@@ -73,8 +102,22 @@ export function ModeSwitch({ value, onChange }: { value: Mode; onChange: (m: Mod
       value={value}
       onChange={onChange}
       options={[
-        { value: 'phone', label: '📱 Phone' },
-        { value: 'google', label: '☁️ Google' },
+        {
+          value: 'phone',
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <IconPhone className="text-[17px]" /> Phone
+            </span>
+          ),
+        },
+        {
+          value: 'google',
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <IconCloud className="text-[17px]" /> Google
+            </span>
+          ),
+        },
       ]}
     />
   )
@@ -117,21 +160,38 @@ export function CloudCard() {
       <div className="grid gap-2 px-3.5 py-3">
         <div className="flex items-center justify-between">
           <b className="text-[14px]">Mode</b>
-          {busy && !on && <RefreshCw size={16} className="animate-spin text-sage-ink" />}
+          {busy && !on && <IconSync className="animate-spin text-lg text-sage-ink" />}
         </div>
         <ModeSwitch value={on ? 'google' : 'phone'} onChange={(m) => toggle(m === 'google')} />
         <Points
           items={
             on
-              ? ['🔒 Encrypted', '📱 More phones', '♻️ Restore anytime']
-              : ['📱 Only on this phone', '💾 Keep a backup file']
+              ? [
+                  [<IconLock />, 'Encrypted'],
+                  [<IconDevices />, 'More phones'],
+                  [<IconRestore />, 'Restore anytime'],
+                ]
+              : [
+                  [<IconPhone />, 'Only on this phone'],
+                  [<IconBackup />, 'Keep a backup file'],
+                ]
           }
         />
       </div>
       {on && (
         <div className="flex items-center gap-3 px-3.5 py-2 text-[13px]">
-          <span className={cx('flex-1', error ? 'text-amber-ink' : 'text-muted')}>
-            {error ? `⚠️ ${error}` : `✓ Synced ${ago(last)}`}
+          <span
+            className={cx(
+              'inline-flex flex-1 items-center gap-1.5',
+              error ? 'text-amber-ink' : 'text-muted',
+            )}
+          >
+            {error ? (
+              <IconWarning className="shrink-0 text-[17px]" />
+            ) : (
+              <IconCloudDone className="shrink-0 text-[17px] text-sage-ink" />
+            )}
+            {error ?? `Synced ${ago(last)}`}
           </span>
           <button
             type="button"
@@ -140,20 +200,23 @@ export function CloudCard() {
             onClick={() => void run(() => syncCloud(true))}
             className="grid size-9 place-items-center rounded-lg text-sage-ink hover:bg-surface2"
           >
-            <RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
+            <IconSync className={cx('text-[19px]', busy && 'animate-spin')} />
           </button>
         </div>
       )}
       {on && (
         <div className="px-3.5 py-2 text-[13px]">
           <div className="flex items-center gap-3">
-            <span className="flex-1">🔑 Key code</span>
+            <span className="inline-flex flex-1 items-center gap-1.5">
+              <IconKey className="text-[17px] text-sage-ink" /> Key code
+            </span>
             <button
               type="button"
               onClick={() => setShow(!show)}
               className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-sage-ink"
             >
-              {show ? <EyeOff size={15} /> : <Eye size={15} />} {show ? 'Hide' : 'Show'}
+              {show ? <IconHide className="text-[17px]" /> : <IconShow className="text-[17px]" />}{' '}
+              {show ? 'Hide' : 'Show'}
             </button>
           </div>
           {show && code && <KeyCodeBox code={code} />}
@@ -187,7 +250,7 @@ function KeyCodeBox({ code }: { code: string }) {
               )
             }}
           >
-            🔐 Save to passwords
+            <IconPassword className="text-[17px]" /> Save to passwords
           </Button>
         )}
         <Button
@@ -202,7 +265,7 @@ function KeyCodeBox({ code }: { code: string }) {
             }
           }}
         >
-          <Copy size={14} /> Copy
+          <IconCopy className="text-[16px]" /> Copy
         </Button>
       </div>
     </div>
@@ -307,9 +370,9 @@ export function CloudFlow({
         <Points
           column
           items={[
-            '🔒 Encrypted on your phone',
-            '📄 Only DayNest’s own file',
-            '🚫 No DayNest server',
+            [<IconLock />, 'Encrypted on your phone'],
+            [<IconFile />, 'Only DayNest’s own file'],
+            [<IconNoServer />, 'No DayNest server'],
           ]}
         />
       )}
@@ -319,7 +382,11 @@ export function CloudFlow({
           <KeyCodeBox code={code} />
           <Points
             column
-            items={['🔑 Needed on a new phone', '👀 Also in Settings → Mode', '⚠️ Can’t be reset']}
+            items={[
+              [<IconKey />, 'Needed on a new phone'],
+              [<IconShow />, 'Also in Settings → Mode'],
+              [<IconWarning />, 'Can’t be reset'],
+            ]}
           />
         </div>
       )}
@@ -396,11 +463,11 @@ export function CloudSyncButton() {
       )}
     >
       {busy ? (
-        <RefreshCw size={18} className="animate-spin" />
+        <IconSync className="animate-spin text-[20px]" />
       ) : error ? (
-        <CloudOff size={18} />
+        <IconCloudOff className="text-[20px]" />
       ) : (
-        <Cloud size={18} />
+        <IconCloudDone className="text-[20px]" />
       )}
     </button>
   )

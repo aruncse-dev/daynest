@@ -15,6 +15,7 @@ import { LinkButton, Panel, Skeleton, Tag, Toggle, cx } from '@/components/ui'
 import { HabitRow } from '@/components/rows'
 import { AlwaysOnCard } from '@/components/AlwaysOnCard'
 import { TabBar, useTab } from '@/components/Tabs'
+import { IconHabits, IconReminders } from '@/components/icons'
 import { pushConfigured, PUSH_ENABLED_KEY } from '@/lib/push'
 
 const TABS = ['habits', 'reminders'] as const
@@ -30,8 +31,8 @@ export function Routines() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'habits', label: 'Habits', emoji: '🌱' },
-          { value: 'reminders', label: 'Reminders', emoji: '🔔' },
+          { value: 'habits', label: 'Habits', icon: <IconHabits /> },
+          { value: 'reminders', label: 'Reminders', icon: <IconReminders /> },
         ]}
       />
       {tab === 'habits' ? <HabitsSection /> : <RemindersTab />}

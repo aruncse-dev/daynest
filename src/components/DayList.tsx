@@ -6,6 +6,7 @@ import type { DayTask } from '@/lib/queries'
 import { displayName } from '@/lib/people'
 import { HabitRow, TaskRow } from './rows'
 import { Avatar, cx } from './ui'
+import { IconEveryone } from './icons'
 
 type DayHabit = { habit: Habit; done: boolean }
 
@@ -150,7 +151,7 @@ export function PersonSection({
         className="flex w-full items-center gap-2.5 py-2.5 text-left"
       >
         <Avatar
-          avatar={profile?.avatar ?? '👪'}
+          avatar={profile?.avatar ?? <IconEveryone className="text-[17px] text-sage-ink" />}
           color={profile?.color ?? 'var(--green2)'}
           size={34}
         />
@@ -219,7 +220,7 @@ export function PersonGroup({
         className="flex w-full items-center gap-2.5 py-2 text-left"
       >
         <Avatar
-          avatar={profile?.avatar ?? '👪'}
+          avatar={profile?.avatar ?? <IconEveryone className="text-[17px] text-sage-ink" />}
           color={profile?.color ?? 'var(--green2)'}
           size={30}
         />

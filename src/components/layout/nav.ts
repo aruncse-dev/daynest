@@ -1,9 +1,18 @@
-import { ListChecks, Repeat, Sun, Users } from 'lucide-react'
+import {
+  IconFamily,
+  IconFamilyFilled,
+  IconRoutines,
+  IconRoutinesFilled,
+  IconToday,
+  IconTodayFilled,
+  IconTodos,
+  IconTodosFilled,
+} from '@/components/icons'
 
-/** Four tabs. Settings lives behind the avatar. */
+/** Four tabs. Settings lives behind the avatar. Filled icon = the tab you're on. */
 export const NAV = [
-  { to: '/', label: 'Today', icon: Sun },
-  { to: '/plan', label: 'To-dos', icon: ListChecks },
-  { to: '/routines', label: 'Routines', icon: Repeat },
-  { to: '/family', label: 'Family', icon: Users },
+  { to: '/', label: 'Today', icon: IconToday, active: IconTodayFilled },
+  { to: '/plan', label: 'To-dos', icon: IconTodos, active: IconTodosFilled },
+  { to: '/routines', label: 'Routines', icon: IconRoutines, active: IconRoutinesFilled },
+  { to: '/family', label: 'Family', icon: IconFamily, active: IconFamilyFilled },
 ] as const
