@@ -1,4 +1,4 @@
-import { CloudFlow, StorageChoice, type StorageMode } from '@/components/CloudCard'
+import { CloudFlow, CloudToggleRow } from '@/components/CloudCard'
 import { CLOUD_SHEET } from '@/lib/cloud/cloud'
 import { googleConfigured } from '@/lib/cloud/google'
 import { useState } from 'react'
@@ -50,7 +50,7 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   // first setup only: ask where the data should live (when Google sign-in is available)
   const cloudOn = useSetting<string | null>(CLOUD_SHEET, null)
   const askStorage = onboarding && googleConfigured() && !cloudOn
-  const [storage, setStorage] = useState<StorageMode>('device')
+  const [storage, setStorage] = useState<'device' | 'google'>('device')
   const [cloud, setCloud] = useState(false)
 
   const answers: SetupAnswers = { areas, wake, phoneFreeAt: phoneFree ? phoneFreeAt : null }
@@ -305,14 +305,11 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                   {created} habits, reminders and to-dos are ready. Change anything, anytime.
                 </p>
                 {askStorage && (
-                  <div className="mt-6 text-left">
-                    <div className="mb-2 text-center text-sm font-bold">
-                      Where should DayNest keep your data?
-                    </div>
-                    <StorageChoice value={storage} onPick={setStorage} />
-                    <p className="mt-2 text-center text-[11px] text-muted">
-                      You can change this anytime in Settings.
-                    </p>
+                  <div className="mt-6 overflow-hidden rounded-[18px] border border-line bg-surface text-left">
+                    <CloudToggleRow
+                      checked={storage === 'google'}
+                      onChange={(v) => setStorage(v ? 'google' : 'device')}
+                    />
                   </div>
                 )}
                 <Button

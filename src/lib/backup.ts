@@ -50,6 +50,7 @@ export const LOCAL_ONLY_SETTINGS = new Set([
   'cloudKeyCode',
   'cloudLastSync',
   'cloudError',
+  'cloudPaused',
   'backupFolderHandle',
   'pushEnabled',
   'pushDevice',

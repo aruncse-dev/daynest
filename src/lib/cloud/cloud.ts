@@ -28,6 +28,8 @@ export const CLOUD_SHEET = 'cloudSheetId'
 export const CLOUD_CODE = 'cloudKeyCode'
 export const CLOUD_LAST = 'cloudLastSync'
 export const CLOUD_ERROR = 'cloudError'
+/** Switched off on this phone, but the link and key code are kept so switching on is instant. */
+export const CLOUD_PAUSED = 'cloudPaused'
 /** Layout of the Sheet itself (tabs and columns). Record shapes are versioned per entry. */
 export const SHEET_FORMAT = 1
 
@@ -44,23 +46,24 @@ async function keysFor(sheet: string, code: string, salt: string) {
 async function saveState(sheet: string, code: string) {
   await setSetting(CLOUD_SHEET, sheet)
   await setSetting(CLOUD_CODE, code)
+  await setSetting(CLOUD_PAUSED, false)
 }
 
 async function syncWith(sheet: string, code: string) {
   const store = new GoogleSheetStore(sheet)
   const { meta } = await store.readAll()
-  if (!meta) throw new Error('The family Sheet is missing its key details.')
+  if (!meta) throw new Error('Sheet is damaged: key details missing')
   if (meta.v > SHEET_FORMAT)
-    throw new Error('This family Sheet needs a newer DayNest. Close and reopen the app to update.')
+    throw new Error('Update DayNest first')
   const keys = await keysFor(sheet, code, meta.salt)
-  if (!(await keysMatch(keys, meta.check))) throw new Error('That key code does not match.')
+  if (!(await keysMatch(keys, meta.check))) throw new Error('Wrong key code')
   const r = await syncOnce(db, store, keys)
   await setSetting(CLOUD_LAST, new Date().toISOString())
   // another phone runs a newer DayNest: its newest changes wait here until this one updates
   await setSetting(
     CLOUD_ERROR,
     r.newer
-      ? `${r.newer} change${r.newer > 1 ? 's' : ''} came from a newer DayNest. Close and reopen the app to update.`
+      ? `Update DayNest to get ${r.newer} new change${r.newer > 1 ? 's' : ''}`
       : null,
   )
   return r
@@ -69,7 +72,8 @@ async function syncWith(sheet: string, code: string) {
 export type TurnOnResult = { kind: 'created'; code: string } | { kind: 'found'; sheet: string }
 
 /** From a tap: sign in, then create the family Sheet, or find the one this account already has. */
-export async function turnOnCloud(): Promise<TurnOnResult> {
+export async function turnOnCloud(): Promise<TurnOnResult | { kind: 'resumed' }> {
+  if (await resumeCloud()) return { kind: 'resumed' }
   await getToken(true)
   const existing = await findFamilySheet()
   if (existing) return { kind: 'found', sheet: existing }
@@ -94,13 +98,13 @@ export async function turnOnCloud(): Promise<TurnOnResult> {
  */
 export async function unlockCloud(sheet: string, input: string, replace: boolean) {
   const code = normalizeKeyCode(input)
-  if (!code) throw new Error('A key code has 20 letters and numbers, like K7QM-2XPA-…')
+  if (!code) throw new Error('Key code = 20 letters/numbers')
   const store = new GoogleSheetStore(sheet)
   const { meta } = await store.readAll()
-  if (!meta) throw new Error('The family Sheet is missing its key details.')
+  if (!meta) throw new Error('Sheet is damaged: key details missing')
   const keys = await deriveKeys(code, meta.salt)
   if (!(await keysMatch(keys, meta.check)))
-    throw new Error('That key code does not match this family Sheet.')
+    throw new Error('Wrong key code')
   cached = { sheet, code, keys }
   if (replace) {
     await db.transaction(
@@ -123,6 +127,7 @@ export async function syncCloud(interactive = false) {
   const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
   const code = await getSetting<string | null>(CLOUD_CODE, null)
   if (!sheet || !code) return null
+  if (await getSetting(CLOUD_PAUSED, false)) return null
   if (!interactive && !hasToken()) return null
   if (running) return running
   running = (async () => {
@@ -139,9 +144,26 @@ export async function syncCloud(interactive = false) {
   return running
 }
 
-/** Stop syncing on this phone. The Sheet and the other phones are untouched. */
+/** Switch off on this phone: data stays here, the Sheet stays in Drive, the key code is kept. */
+export async function pauseCloud() {
+  await setSetting(CLOUD_PAUSED, true)
+  await setSetting(CLOUD_ERROR, null)
+}
+
+/** Switch back on after a pause (from a tap). False if this phone was never linked. */
+export async function resumeCloud(): Promise<boolean> {
+  const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
+  const code = await getSetting<string | null>(CLOUD_CODE, null)
+  if (!sheet || !code) return false
+  await setSetting(CLOUD_PAUSED, false)
+  await syncCloud(true)
+  return true
+}
+
+/** Forget the link and key code on this phone. The Sheet and the other phones are untouched. */
 export async function turnOffCloud() {
-  for (const k of [CLOUD_SHEET, CLOUD_CODE, CLOUD_LAST, CLOUD_ERROR]) await db.settings.delete(k)
+  for (const k of [CLOUD_SHEET, CLOUD_CODE, CLOUD_LAST, CLOUD_ERROR, CLOUD_PAUSED])
+    await db.settings.delete(k)
   cached = null
   signOutGoogle()
 }

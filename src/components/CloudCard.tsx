@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Cloud, CloudOff, Copy, Eye, RefreshCw } from 'lucide-react'
+import { Cloud, CloudOff, Copy, Eye, EyeOff, RefreshCw } from 'lucide-react'
 import { localChanges } from '@/db/db'
 import { useNow, useSetting } from '@/lib/hooks'
 import { googleConfigured } from '@/lib/cloud/google'
@@ -7,9 +7,11 @@ import {
   CLOUD_CODE,
   CLOUD_ERROR,
   CLOUD_LAST,
+  CLOUD_PAUSED,
   CLOUD_SHEET,
+  pauseCloud,
+  resumeCloud,
   syncCloud,
-  turnOffCloud,
   turnOnCloud,
   unlockCloud,
 } from '@/lib/cloud/cloud'
@@ -19,9 +21,11 @@ import { Button, Field, Input, Sheet, Toggle, cx } from './ui'
 // eslint-disable-next-line react-refresh/only-export-components -- small hook used with these components
 export function useCloud() {
   const sheet = useSetting<string | null>(CLOUD_SHEET, null)
+  const paused = useSetting(CLOUD_PAUSED, false)
   const last = useSetting<string | null>(CLOUD_LAST, null)
   const error = useSetting<string | null>(CLOUD_ERROR, null)
-  return { on: !!sheet, sheet, last, error }
+  /** linked = this phone knows the Sheet + key code; on = linked and not paused */
+  return { on: !!sheet && !paused, linked: !!sheet, paused, sheet, last, error }
 }
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -37,173 +41,122 @@ function ago(iso: string | null) {
     : new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
-export type StorageMode = 'device' | 'google'
-
-/**
- * Where DayNest keeps the data: only this phone, or this phone + an encrypted copy in the
- * user's own Google Drive. Used in setup and in Settings.
- */
-export function StorageChoice({
-  value,
-  onPick,
-}: {
-  value: StorageMode
-  onPick: (v: StorageMode) => void
-}) {
-  const options: { v: StorageMode; icon: string; title: string; text: string; note?: string }[] = [
-    {
-      v: 'device',
-      icon: '📱',
-      title: 'Only on this phone',
-      text: 'Private and works offline. No account. Keep a backup file now and then.',
-    },
-    {
-      v: 'google',
-      icon: '☁️',
-      title: 'This phone + your Google Drive',
-      text: 'An encrypted copy in your own Google Sheet: safe if the phone is lost or reset, and usable on more phones with your Google account.',
-      note: "Sharing with family members' own phones: coming next",
-    },
-  ]
+/** Short icon points instead of sentences. */
+function Points({ items, column }: { items: string[]; column?: boolean }) {
   return (
-    <div role="radiogroup" aria-label="Where to keep your data" className="grid gap-2">
-      {options.map((o) => {
-        const on = value === o.v
-        return (
-          <button
-            key={o.v}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onPick(o.v)}
-            className={cx(
-              'flex items-start gap-3 rounded-[16px] border p-3 text-left transition active:scale-[.99]',
-              on ? 'border-sage bg-sage-soft ring-1 ring-sage' : 'border-line bg-surface',
-            )}
-          >
-            <span className="text-2xl leading-none">{o.icon}</span>
-            <span className="min-w-0 flex-1">
-              <b className="block text-[14px]">{o.title}</b>
-              <span className="block text-xs text-muted">{o.text}</span>
-              {o.note && (
-                <span className="mt-1 block text-[11px] font-semibold text-sage-ink">{o.note}</span>
-              )}
-            </span>
-            <span
-              aria-hidden
-              className={cx(
-                'mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border-2',
-                on ? 'border-sage' : 'border-line',
-              )}
-            >
-              {on && <span className="size-2.5 rounded-full bg-sage" />}
-            </span>
-          </button>
-        )
-      })}
+    <ul
+      className={cx(
+        'text-[11.5px] text-muted',
+        column ? 'grid gap-1.5 text-[13px] text-ink' : 'flex flex-wrap gap-x-2.5 gap-y-0.5',
+      )}
+    >
+      {items.map((i) => (
+        <li key={i}>{i}</li>
+      ))}
+    </ul>
+  )
+}
+
+/** ☁️ Google Drive backup [toggle]. Used in setup and Settings. */
+export function CloudToggleRow({
+  checked,
+  onChange,
+  busy,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  busy?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-3">
+      <span className="text-2xl leading-none">{checked ? '☁️' : '📱'}</span>
+      <span className="min-w-0 flex-1">
+        <b className="block text-[14px]">Google Drive backup</b>
+        <Points
+          items={
+            checked
+              ? ['🔒 Encrypted', '📱 More phones', '♻️ Restore anytime']
+              : ['📱 Only on this phone']
+          }
+        />
+      </span>
+      {busy ? (
+        <RefreshCw size={18} className="animate-spin text-sage-ink" />
+      ) : (
+        <Toggle checked={checked} onChange={onChange} label="Google Drive backup" />
+      )}
     </div>
   )
 }
 
 /**
- * Settings: where the data lives. Google = the encrypted family copy in the user's own Sheet.
- * Hidden until the app has a Google sign-in ID.
+ * Settings: one toggle. Off = only this phone. Switching off only pauses (link + key code
+ * kept), so switching back on is instant. Hidden until the app has a Google sign-in ID.
  */
 export function CloudCard() {
-  const { on, last, error } = useCloud()
+  const { on, linked, paused, last, error } = useCloud()
   const code = useSetting<string | null>(CLOUD_CODE, null)
   const [flow, setFlow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
-  const [confirmOff, setConfirmOff] = useState(false)
   if (!googleConfigured()) return null
 
-  const pick = (v: StorageMode) => {
-    if (v === 'google' && !on) setFlow(true)
-    setConfirmOff(v === 'device' && on)
+  const run = async (fn: () => Promise<unknown>, ok?: string) => {
+    setBusy(true)
+    try {
+      await fn()
+      if (ok) toast(ok, { emoji: '☁️' })
+    } catch (e) {
+      toast(errText(e), { emoji: '⚠️' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggle = (v: boolean) => {
+    if (!v) {
+      void pauseCloud()
+      toast('Only on this phone now', { emoji: '📱' })
+    } else if (linked) void run(resumeCloud, 'Back on · synced')
+    else setFlow(true)
   }
 
   return (
-    <section>
-      <h2 className="mb-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
-        Where your data lives
-      </h2>
-      <StorageChoice value={on && !confirmOff ? 'google' : 'device'} onPick={pick} />
-
-      {confirmOff && (
-        <div className="mt-2 rounded-[16px] border border-amber-ink/30 bg-amber-soft p-3 text-sm">
-          <b>Keep data only on this phone?</b>
-          <p className="text-xs text-muted">
-            This phone stops syncing. Your data stays here, and the Sheet stays in your Google Drive
-            for your other phones.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setConfirmOff(false)}>
-              Keep Google
-            </Button>
-            <Button
-              size="sm"
-              onClick={async () => {
-                await turnOffCloud()
-                setConfirmOff(false)
-                toast('Now kept only on this phone', { emoji: '📱' })
-              }}
-            >
-              <CloudOff size={14} /> Only this phone
-            </Button>
-          </div>
+    <section className="overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
+      <CloudToggleRow checked={on} onChange={toggle} busy={busy && !on} />
+      {on && (
+        <div className="flex items-center gap-3 px-3.5 py-2 text-[13px]">
+          <span className={cx('flex-1', error ? 'text-amber-ink' : 'text-muted')}>
+            {error ? `⚠️ ${error}` : `✓ Synced ${ago(last)}`}
+          </span>
+          <button
+            type="button"
+            aria-label="Sync now"
+            disabled={busy}
+            onClick={() => void run(() => syncCloud(true))}
+            className="grid size-9 place-items-center rounded-lg text-sage-ink hover:bg-surface2"
+          >
+            <RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
+          </button>
         </div>
       )}
-
       {on && (
-        <div className="mt-2 overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
-          <div className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
-            <Cloud size={18} className="shrink-0 text-sage-ink" />
-            <span className="flex-1">
-              Google Sheet sync
-              <small className={cx('block text-[11px]', error ? 'text-amber-ink' : 'text-muted')}>
-                {error ? `Not synced: ${error}` : `Synced ${ago(last)} · end-to-end encrypted`}
-              </small>
-            </span>
-            <Button
-              size="sm"
-              variant="soft"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  const r = await syncCloud(true)
-                  toast(
-                    r?.pulled
-                      ? `Synced · ${r.pulled} change${r.pulled > 1 ? 's' : ''} in`
-                      : 'Synced',
-                    { emoji: '☁️' },
-                  )
-                } catch (e) {
-                  toast(errText(e), { emoji: '⚠️' })
-                } finally {
-                  setBusy(false)
-                }
-              }}
+        <div className="px-3.5 py-2 text-[13px]">
+          <div className="flex items-center gap-3">
+            <span className="flex-1">🔑 Key code</span>
+            <button
+              type="button"
+              onClick={() => setShow(!show)}
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-semibold text-sage-ink"
             >
-              <RefreshCw size={14} className={busy ? 'animate-spin' : ''} /> Sync
-            </Button>
+              {show ? <EyeOff size={15} /> : <Eye size={15} />} {show ? 'Hide' : 'Show'}
+            </button>
           </div>
-          <div className="px-3.5 py-2.5 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="flex-1">
-                Family key code
-                <small className="block text-[11px] text-muted">
-                  Needed on a new phone. Keep it written down; nobody can reset it.
-                </small>
-              </span>
-              <Button size="sm" variant="outline" onClick={() => setShow(!show)}>
-                <Eye size={14} /> {show ? 'Hide' : 'Show'}
-              </Button>
-            </div>
-            {show && code && <KeyCodeBox code={code} />}
-          </div>
+          {show && code && <KeyCodeBox code={code} />}
         </div>
+      )}
+      {paused && linked && (
+        <div className="px-3.5 py-2 text-[12px] text-muted">⏸ Paused · switch on anytime</div>
       )}
       {/* stays mounted while the card switches to "on": it still has the key code to show */}
       {flow && <CloudFlow onClose={() => setFlow(false)} />}
@@ -213,7 +166,7 @@ export function CloudCard() {
 
 function KeyCodeBox({ code }: { code: string }) {
   return (
-    <div className="mt-2.5 rounded-xl bg-surface2 p-3 text-center">
+    <div className="mt-2 rounded-xl bg-surface2 p-3 text-center">
       <code className="block select-all text-[18px] font-bold tracking-wider">{code}</code>
       <Button
         size="sm"
@@ -222,9 +175,9 @@ function KeyCodeBox({ code }: { code: string }) {
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(code)
-            toast('Key code copied', { emoji: '📋' })
+            toast('Copied', { emoji: '📋' })
           } catch {
-            toast('Long-press the code to copy it')
+            toast('Long-press to copy')
           }
         }}
       >
@@ -235,8 +188,8 @@ function KeyCodeBox({ code }: { code: string }) {
 }
 
 /**
- * Turn on (new family copy) or open an existing one with its key code.
- * `restore`: from the welcome screen on a new phone, where replacing is the default.
+ * Sign in → new key code (first time) or enter key code (Sheet already exists).
+ * `restore`: from the welcome screen on a new phone (replaces this phone's data by default).
  */
 export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?: boolean }) {
   const [step, setStep] = useState<'start' | 'created' | 'unlock'>('start')
@@ -252,7 +205,10 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
     setErr(null)
     try {
       const r = await turnOnCloud()
-      if (r.kind === 'created') {
+      if (r.kind === 'resumed') {
+        toast('Back on · synced', { emoji: '☁️' })
+        onClose()
+      } else if (r.kind === 'created') {
         setCode(r.code)
         setStep('created')
       } else {
@@ -271,7 +227,7 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
     setErr(null)
     try {
       const r = await unlockCloud(sheet, code, replace)
-      toast(`Family copy opened · ${r.pulled} item${r.pulled === 1 ? '' : 's'}`, { emoji: '☁️' })
+      toast(`Synced · ${r.pulled} item${r.pulled === 1 ? '' : 's'}`, { emoji: '☁️' })
       onClose()
     } catch (e) {
       setErr(errText(e))
@@ -282,7 +238,13 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
 
   return (
     <Sheet
-      title={step === 'created' ? 'Your family key code' : 'Family copy'}
+      title={
+        step === 'created'
+          ? 'Your key code'
+          : step === 'unlock'
+            ? 'Enter your key code'
+            : 'Google Drive backup'
+      }
       onClose={onClose}
       footer={
         step === 'start' ? (
@@ -301,49 +263,40 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
       }
     >
       {step === 'start' && (
-        <div className="grid gap-2 text-sm">
-          <p>
-            {restore
-              ? 'Sign in with the Google account that holds your family copy.'
-              : 'DayNest keeps an encrypted copy in a Google Sheet in your own Drive.'}
-          </p>
-          <ul className="grid gap-1 text-xs text-muted">
-            <li>🔒 Locked on the phone with a family key code. Google sees only gibberish.</li>
-            <li>📄 DayNest can only see the files it creates, not the rest of your Drive.</li>
-            <li>🚫 No DayNest server or account. Google handles sign-in and password reset.</li>
-          </ul>
-        </div>
+        <Points
+          column
+          items={[
+            restore ? '👤 Use the same Google account' : '🔒 Encrypted on your phone',
+            '📄 Only DayNest’s own file',
+            '🚫 No DayNest server',
+          ]}
+        />
       )}
 
       {step === 'created' && (
-        <div className="grid gap-3 text-sm">
-          <p>
-            This code unlocks your family copy on a new phone. <b>Write it down</b> or save it
-            somewhere safe. It's shown again in Settings while this phone is signed in.
-          </p>
+        <div className="grid gap-3">
           <KeyCodeBox code={code} />
-          <p className="text-xs text-amber-ink">
-            Nobody can reset this code, DayNest included. If every phone is lost and the code too,
-            the family copy can't be opened.
-          </p>
-          <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3">
-            <span>I've saved the key code</span>
-            <Toggle checked={saved} onChange={setSaved} label="I've saved the key code" />
+          <Points
+            column
+            items={['✍️ Write it down', '🔑 Needed on a new phone', '⚠️ Can’t be reset']}
+          />
+          <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
+            <span>I saved it</span>
+            <Toggle checked={saved} onChange={setSaved} label="I saved it" />
           </label>
         </div>
       )}
 
       {step === 'unlock' && (
         <div className="grid gap-3 text-sm">
-          <p>Found your family copy. Enter the family key code to unlock it.</p>
-          <Field label="Family key code">
+          <Field label="Key code">
             <Input
               value={code}
               onChange={(e) => {
                 setCode(e.target.value)
                 setErr(null)
               }}
-              placeholder="K7QM-2XPA-9DTR-W4NE-B3HF"
+              placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"
               autoCapitalize="characters"
               autoComplete="off"
               spellCheck={false}
@@ -351,19 +304,15 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
           </Field>
           <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3">
             <span>
-              Replace this phone's data
-              <small className="block text-[11px] text-muted">
-                {replace
-                  ? 'Best on a new phone: start from the family copy.'
-                  : "Off: this phone's items are added to the family copy."}
-              </small>
+              Replace this phone’s data
+              <small className="block text-[11px] text-muted">New phone? Keep on</small>
             </span>
             <Toggle checked={replace} onChange={setReplace} label="Replace this phone's data" />
           </label>
         </div>
       )}
 
-      {err && <p className="rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">{err}</p>}
+      {err && <p className="rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">⚠️ {err}</p>}
     </Sheet>
   )
 }
