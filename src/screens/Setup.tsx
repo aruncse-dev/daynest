@@ -1,5 +1,4 @@
-import { CloudFlow, CloudToggleRow } from '@/components/CloudCard'
-import { CLOUD_SHEET } from '@/lib/cloud/cloud'
+import { CloudFlow } from '@/components/CloudCard'
 import { googleConfigured } from '@/lib/cloud/google'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -47,11 +46,6 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
   const members = useMembers()
   const [drafts, setDrafts] = useState<{ name: string; role: FamilyRole }[]>([])
   const [created, setCreated] = useState(0)
-  // first setup only: ask where the data should live (when Google sign-in is available)
-  const cloudOn = useSetting<string | null>(CLOUD_SHEET, null)
-  const askStorage = onboarding && googleConfigured() && !cloudOn
-  const [storage, setStorage] = useState<'device' | 'google'>('device')
-  const [cloud, setCloud] = useState(false)
 
   const answers: SetupAnswers = { areas, wake, phoneFreeAt: phoneFree ? phoneFreeAt : null }
   const suggestions = suggest(answers) // cheap and pure
@@ -304,21 +298,9 @@ export function Setup({ onboarding = false }: { onboarding?: boolean }) {
                 <p className="mt-2 text-muted">
                   {created} habits, reminders and to-dos are ready. Change anything, anytime.
                 </p>
-                {askStorage && (
-                  <div className="mt-6 overflow-hidden rounded-[18px] border border-line bg-surface text-left">
-                    <CloudToggleRow
-                      checked={storage === 'google'}
-                      onChange={(v) => setStorage(v ? 'google' : 'device')}
-                    />
-                  </div>
-                )}
-                <Button
-                  className="mt-6 w-full"
-                  onClick={() => (askStorage && storage === 'google' ? setCloud(true) : enterApp())}
-                >
-                  {askStorage && storage === 'google' ? 'Continue with Google' : "Let's go 🌿"}
+                <Button className="mt-8 w-full" onClick={enterApp}>
+                  Let's go 🌿
                 </Button>
-                {cloud && <CloudFlow onClose={() => void enterApp()} />}
               </div>
             </div>
           )}
@@ -375,10 +357,10 @@ function StepShell({
 }
 
 function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
-  const [restore, setRestore] = useState(false)
+  const [google, setGoogle] = useState(false)
   return (
     <div className="grid h-full place-items-center text-center">
-      <div>
+      <div className="w-full">
         <img
           src="/favicon.svg"
           alt=""
@@ -387,27 +369,67 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
         <h1 className="text-[34px] font-bold leading-tight tracking-[-1.3px]">
           Welcome to <span className="shimmer-text">DayNest</span>
         </h1>
-        <p className="mt-2 text-muted">
-          Brighter days, one small step at a time: your to-dos, habits you choose, gentle reminders
-          and less screen time. 🌿
-        </p>
-        <div className="mt-8 grid gap-2">
-          <Button onClick={onStart}>Get started</Button>
-          <Button variant="soft" onClick={onTour}>
-            ▶️ Watch a 30-second tour
-          </Button>
+        <p className="mt-2 text-muted">Your day, habits and family. 🌿</p>
+
+        <div className="mt-7 grid gap-2.5 text-left">
+          <ModeButton
+            icon="📱"
+            title="Phone mode"
+            points={['Just this phone', 'No sign-in']}
+            onClick={onStart}
+          />
           {googleConfigured() && (
-            <Button variant="ghost" onClick={() => setRestore(true)}>
-              ☁️ I have a family copy in Google
-            </Button>
+            <ModeButton
+              icon="☁️"
+              title="Google mode"
+              points={['Sign in with Google', 'Encrypted backup', 'More phones']}
+              onClick={() => setGoogle(true)}
+            />
           )}
         </div>
-        <p className="mx-auto mt-5 max-w-xs text-[11px] text-muted">
-          No account needed. Your data is saved on this phone; back it up from Settings.
-        </p>
-        {restore && <CloudFlow restore onClose={() => setRestore(false)} />}
+        <button type="button" onClick={onTour} className="mt-4 text-sm font-semibold text-sage-ink">
+          ▶️ 30-second tour
+        </button>
+        {googleConfigured() && (
+          <p className="mt-1 text-[11px] text-muted">Change mode anytime in Settings</p>
+        )}
+        {/* Google: an existing family copy opens straight into the app; a new one continues setup */}
+        {google && (
+          <CloudFlow
+            restore
+            onDone={(kind) => kind === 'created' && onStart()}
+            onClose={() => setGoogle(false)}
+          />
+        )}
       </div>
     </div>
+  )
+}
+
+function ModeButton({
+  icon,
+  title,
+  points,
+  onClick,
+}: {
+  icon: string
+  title: string
+  points: string[]
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-3.5 text-left shadow-sm transition active:scale-[.98]"
+    >
+      <span className="text-3xl leading-none">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <b className="block text-[16px]">{title}</b>
+        <span className="block text-xs text-muted">{points.join(' · ')}</span>
+      </span>
+      <span className="text-lg text-muted">›</span>
+    </button>
   )
 }
 

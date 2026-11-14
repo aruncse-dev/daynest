@@ -32,7 +32,7 @@ describe('App', () => {
     await db.delete()
     await db.open()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Get started' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Phone mode/ }))
     await userEvent.type(screen.getByPlaceholderText('Your name'), 'Robin')
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
     // optional family step: add a child
@@ -114,7 +114,7 @@ describe('Tour', () => {
     await db.delete()
     await db.open()
     render(<App />)
-    await userEvent.click(await screen.findByRole('button', { name: /Watch a 30-second tour/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /30-second tour/ }))
     expect(screen.getByRole('dialog', { name: 'DayNest tour' })).toBeInTheDocument()
     expect(screen.getByText('Your day in one list')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))

@@ -14,7 +14,7 @@ import {
   getFolderHandle,
   RETENTION_KEY,
 } from '@/lib/folderBackup'
-import { useMembers, usePrimaryProfile, useSetting } from '@/lib/hooks'
+import { usePrimaryProfile, useSetting } from '@/lib/hooks'
 import { toast, useUI } from '@/store/ui'
 import {
   Avatar,
@@ -35,14 +35,28 @@ import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 
 /** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
+type Panel = 'look' | 'night' | 'backup' | 'more'
+
+/** Settings: a few rows; each opens a small sheet. */
 export function Settings() {
   const me = usePrimaryProfile()
-  const members = useMembers()
   const openSheet = useUI((s) => s.openSheet)
   const theme = useSetting<'light' | 'dark' | 'system'>('theme', 'system')
   const sound = useSetting('reminderSound', true)
+  const quiet = useSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
+  const lastBackup = useLiveQuery(
+    () =>
+      db.backupHistory
+        .orderBy('createdAt')
+        .reverse()
+        .filter((h) => h.status === 'success')
+        .first(),
+    [],
+  )
   const navigate = useNavigate()
+  const [panel, setPanel] = useState<Panel | null>(null)
   const [tour, setTour] = useState(false)
+  const close = () => setPanel(null)
 
   return (
     <div className="grid gap-3">
@@ -53,38 +67,57 @@ export function Settings() {
         <h1 className="text-[24px] font-bold tracking-[-0.8px]">Settings</h1>
       </div>
 
-      <Group>
-        {me && (
+      <UpdateRow />
+
+      {me && (
+        <Group>
           <Row onClick={() => openSheet({ type: 'profile', profile: me })}>
             <Avatar avatar={me.avatar} color={me.color} size={36} />
             <span className="flex-1 font-semibold">{me.name}</span>
             <ChevronRight size={18} className="text-muted" />
           </Row>
-        )}
-        <Row
-          onClick={() => (members.length ? navigate('/family') : openSheet({ type: 'profile' }))}
-        >
-          <span className="flex-1">
-            Family members
-            <small className="block text-[11px] text-muted">
-              {members.length
-                ? members.map((m) => m.name).join(', ')
-                : 'Add people you plan for. Kept only on this phone.'}
-            </small>
-          </span>
-          {members.length ? (
-            <ChevronRight size={18} className="text-muted" />
-          ) : (
-            <span className="text-sm font-bold text-sage-ink">+ Add</span>
-          )}
-        </Row>
-      </Group>
+        </Group>
+      )}
 
       <CloudCard />
 
       <Group>
-        <div className="px-3.5 py-3">
-          <div className="mb-2 text-sm">Theme</div>
+        <NavRow
+          icon="🎨"
+          title="Look & sound"
+          sub={`${theme === 'system' ? 'Auto' : theme === 'dark' ? 'Dark' : 'Light'} · chime ${sound ? 'on' : 'off'}`}
+          onClick={() => setPanel('look')}
+        />
+        <NavRow
+          icon="🌙"
+          title="Phone-free nights"
+          sub={quiet.enabled ? `${formatShort(quiet.start)} – ${formatShort(quiet.end)}` : 'Off'}
+          onClick={() => setPanel('night')}
+        />
+        <NavRow
+          icon="💾"
+          title="Backup file"
+          sub={
+            lastBackup
+              ? `Last ${new Date(lastBackup.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+              : 'None yet'
+          }
+          onClick={() => setPanel('backup')}
+        />
+        <NavRow
+          icon="ℹ️"
+          title="More"
+          sub="Tour · Privacy · Erase"
+          onClick={() => setPanel('more')}
+        />
+      </Group>
+
+      <p className="px-1 text-center text-[11px] text-muted">
+        DayNest {__APP_VERSION__} · build {__BUILD_ID__}
+      </p>
+
+      {panel === 'look' && (
+        <Sheet title="Look & sound" onClose={close}>
           <Segmented
             label="Theme"
             value={theme}
@@ -95,72 +128,101 @@ export function Settings() {
               { value: 'system', label: 'Auto' },
             ]}
           />
-        </div>
-        <Row>
-          <span className="flex-1">Chime when a reminder appears</span>
-          <Toggle
-            checked={sound}
-            onChange={(v) => setSetting('reminderSound', v)}
-            label="Nudge chime"
-          />
-        </Row>
-      </Group>
+          <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
+            <span>🔔 Chime on reminders</span>
+            <Toggle
+              checked={sound}
+              onChange={(v) => setSetting('reminderSound', v)}
+              label="Chime on reminders"
+            />
+          </label>
+        </Sheet>
+      )}
 
-      <PhoneFreeGroup />
+      {panel === 'night' && (
+        <Sheet title="Phone-free nights" onClose={close}>
+          <PhoneFreeGroup />
+        </Sheet>
+      )}
 
-      <BackupGroup />
+      {panel === 'backup' && (
+        <Sheet title="Backup file" onClose={close}>
+          <BackupGroup />
+        </Sheet>
+      )}
 
-      <Group>
-        <Row onClick={() => setTour(true)}>
-          <span className="flex-1">▶️ Watch the 30-second tour</span>
-          <ChevronRight size={18} className="text-muted" />
-        </Row>
-        <Row onClick={() => navigate('/setup')}>
-          <span className="flex-1">🪄 Get suggestions again (setup)</span>
-          <ChevronRight size={18} className="text-muted" />
-        </Row>
-      </Group>
-
-      <details className="rounded-[18px] border border-line bg-surface px-3.5 py-3 text-sm">
-        <summary className="cursor-pointer">🔒 Privacy & storage</summary>
-        <ul className="mt-2 grid gap-1.5 text-xs text-muted">
-          <li>• The app loads from the web, but what you enter is saved only on this phone.</li>
-          <li>
-            • No DayNest account or server database, no ads, no tracking. The optional family copy
-            is encrypted on the phone and stored in your own Google Sheet.
-          </li>
-          <li>
-            • Browser storage isn't encrypted. Anyone using this phone's browser can open DayNest.
-          </li>
-          <li>• Clearing browser data erases DayNest, so keep a backup.</li>
-        </ul>
-        <StorageLine />
-      </details>
-
-      <UpdateRow />
-
-      <div className="flex items-center justify-between gap-3 px-1">
-        <span className="text-[11px] text-muted">
-          DayNest {__APP_VERSION__} · data v{SCHEMA_VERSION}
-          <br />
-          build {__BUILD_ID__} ·{' '}
-          {new Date(__BUILD_TIME__).toLocaleDateString([], { day: 'numeric', month: 'short' })}
-        </span>
-        <ConfirmButton
-          className="!min-h-9 !px-3 !text-xs"
-          confirmText="Erase everything?"
-          onConfirm={async () => {
-            await clearAllData()
-            await setSetting(SETTING_ONBOARDED, false)
-            toast('All data erased')
-          }}
-        >
-          Erase all data
-        </ConfirmButton>
-      </div>
+      {panel === 'more' && (
+        <Sheet title="More" onClose={close}>
+          <Group>
+            <Row
+              onClick={() => {
+                close()
+                setTour(true)
+              }}
+            >
+              <span className="flex-1">▶️ 30-second tour</span>
+              <ChevronRight size={18} className="text-muted" />
+            </Row>
+            <Row onClick={() => navigate('/setup')}>
+              <span className="flex-1">🪄 Suggestions again</span>
+              <ChevronRight size={18} className="text-muted" />
+            </Row>
+          </Group>
+          <div className="rounded-[18px] border border-line bg-surface px-3.5 py-3 text-sm">
+            <b>🔒 Privacy</b>
+            <ul className="mt-1.5 grid gap-1 text-xs text-muted">
+              <li>📱 Saved on this phone</li>
+              <li>☁️ Google mode: encrypted in your own Drive</li>
+              <li>🚫 No ads, no tracking, no DayNest server</li>
+              <li>⚠️ Clearing browser data erases it: keep a backup</li>
+            </ul>
+            <StorageLine />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] text-muted">
+              data v{SCHEMA_VERSION} ·{' '}
+              {new Date(__BUILD_TIME__).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+            </span>
+            <ConfirmButton
+              className="!min-h-9 !px-3 !text-xs"
+              confirmText="Erase everything?"
+              onConfirm={async () => {
+                await clearAllData()
+                await setSetting(SETTING_ONBOARDED, false)
+                toast('All data erased')
+              }}
+            >
+              Erase all data
+            </ConfirmButton>
+          </div>
+        </Sheet>
+      )}
 
       {tour && <Tour onClose={() => setTour(false)} />}
     </div>
+  )
+}
+
+function NavRow({
+  icon,
+  title,
+  sub,
+  onClick,
+}: {
+  icon: string
+  title: string
+  sub: string
+  onClick: () => void
+}) {
+  return (
+    <Row onClick={onClick}>
+      <span className="text-xl leading-none">{icon}</span>
+      <span className="min-w-0 flex-1">
+        {title}
+        <small className="block truncate text-[11px] text-muted">{sub}</small>
+      </span>
+      <ChevronRight size={18} className="text-muted" />
+    </Row>
   )
 }
 

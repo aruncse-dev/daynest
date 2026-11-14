@@ -16,7 +16,13 @@ import {
   unlockCloud,
 } from '@/lib/cloud/cloud'
 import { toast } from '@/store/ui'
-import { Button, Field, Input, Sheet, Toggle, cx } from './ui'
+import { Button, Field, Input, Segmented, Sheet, Toggle, cx } from './ui'
+import {
+  canSaveToPasswordManager,
+  KEY_FIELD_USERNAME,
+  loadSavedKeyCode,
+  saveKeyCode,
+} from '@/lib/cloud/keySave'
 
 // eslint-disable-next-line react-refresh/only-export-components -- small hook used with these components
 export function useCloud() {
@@ -57,35 +63,20 @@ function Points({ items, column }: { items: string[]; column?: boolean }) {
   )
 }
 
-/** ☁️ Google Drive backup [toggle]. Used in setup and Settings. */
-export function CloudToggleRow({
-  checked,
-  onChange,
-  busy,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  busy?: boolean
-}) {
+export type Mode = 'phone' | 'google'
+
+/** 📱 Phone | ☁️ Google. Phone = only on this phone. Google = + encrypted copy in your Drive. */
+export function ModeSwitch({ value, onChange }: { value: Mode; onChange: (m: Mode) => void }) {
   return (
-    <div className="flex items-center gap-3 px-3.5 py-3">
-      <span className="text-2xl leading-none">{checked ? '☁️' : '📱'}</span>
-      <span className="min-w-0 flex-1">
-        <b className="block text-[14px]">Google Drive backup</b>
-        <Points
-          items={
-            checked
-              ? ['🔒 Encrypted', '📱 More phones', '♻️ Restore anytime']
-              : ['📱 Only on this phone']
-          }
-        />
-      </span>
-      {busy ? (
-        <RefreshCw size={18} className="animate-spin text-sage-ink" />
-      ) : (
-        <Toggle checked={checked} onChange={onChange} label="Google Drive backup" />
-      )}
-    </div>
+    <Segmented
+      label="Mode"
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: 'phone', label: '📱 Phone' },
+        { value: 'google', label: '☁️ Google' },
+      ]}
+    />
   )
 }
 
@@ -94,7 +85,7 @@ export function CloudToggleRow({
  * kept), so switching back on is instant. Hidden until the app has a Google sign-in ID.
  */
 export function CloudCard() {
-  const { on, linked, paused, last, error } = useCloud()
+  const { on, linked, last, error } = useCloud()
   const code = useSetting<string | null>(CLOUD_CODE, null)
   const [flow, setFlow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -123,7 +114,20 @@ export function CloudCard() {
 
   return (
     <section className="overflow-hidden rounded-[18px] border border-line bg-surface [&>*+*]:border-t [&>*+*]:border-line-soft">
-      <CloudToggleRow checked={on} onChange={toggle} busy={busy && !on} />
+      <div className="grid gap-2 px-3.5 py-3">
+        <div className="flex items-center justify-between">
+          <b className="text-[14px]">Mode</b>
+          {busy && !on && <RefreshCw size={16} className="animate-spin text-sage-ink" />}
+        </div>
+        <ModeSwitch value={on ? 'google' : 'phone'} onChange={(m) => toggle(m === 'google')} />
+        <Points
+          items={
+            on
+              ? ['🔒 Encrypted', '📱 More phones', '♻️ Restore anytime']
+              : ['📱 Only on this phone', '💾 Keep a backup file']
+          }
+        />
+      </div>
       {on && (
         <div className="flex items-center gap-3 px-3.5 py-2 text-[13px]">
           <span className={cx('flex-1', error ? 'text-amber-ink' : 'text-muted')}>
@@ -155,9 +159,6 @@ export function CloudCard() {
           {show && code && <KeyCodeBox code={code} />}
         </div>
       )}
-      {paused && linked && (
-        <div className="px-3.5 py-2 text-[12px] text-muted">⏸ Paused · switch on anytime</div>
-      )}
       {/* stays mounted while the card switches to "on": it still has the key code to show */}
       {flow && <CloudFlow onClose={() => setFlow(false)} />}
     </section>
@@ -168,21 +169,42 @@ function KeyCodeBox({ code }: { code: string }) {
   return (
     <div className="mt-2 rounded-xl bg-surface2 p-3 text-center">
       <code className="block select-all text-[18px] font-bold tracking-wider">{code}</code>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="mt-1"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(code)
-            toast('Copied', { emoji: '📋' })
-          } catch {
-            toast('Long-press to copy')
-          }
-        }}
-      >
-        <Copy size={14} /> Copy
-      </Button>
+      <div className="mt-2 flex justify-center gap-2">
+        {canSaveToPasswordManager() && (
+          <Button
+            size="sm"
+            onClick={async () => {
+              const r = await saveKeyCode(code)
+              toast(
+                r === 'saved'
+                  ? 'Saved to passwords'
+                  : r === 'copied'
+                    ? 'Copied'
+                    : 'Long-press to copy',
+                {
+                  emoji: r === 'saved' ? '🔐' : '📋',
+                },
+              )
+            }}
+          >
+            🔐 Save to passwords
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(code)
+              toast('Copied', { emoji: '📋' })
+            } catch {
+              toast('Long-press to copy')
+            }
+          }}
+        >
+          <Copy size={14} /> Copy
+        </Button>
+      </div>
     </div>
   )
 }
@@ -191,13 +213,21 @@ function KeyCodeBox({ code }: { code: string }) {
  * Sign in → new key code (first time) or enter key code (Sheet already exists).
  * `restore`: from the welcome screen on a new phone (replaces this phone's data by default).
  */
-export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?: boolean }) {
+export function CloudFlow({
+  onClose,
+  onDone,
+  restore,
+}: {
+  onClose: () => void
+  /** after success: 'created' (new Sheet), 'unlocked' (existing Sheet) or 'resumed' */
+  onDone?: (kind: 'created' | 'unlocked' | 'resumed') => void
+  restore?: boolean
+}) {
   const [step, setStep] = useState<'start' | 'created' | 'unlock'>('start')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [code, setCode] = useState('')
   const [sheet, setSheet] = useState('')
-  const [saved, setSaved] = useState(false)
   const [replace, setReplace] = useState(!!restore)
 
   const start = async () => {
@@ -207,6 +237,7 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
       const r = await turnOnCloud()
       if (r.kind === 'resumed') {
         toast('Back on · synced', { emoji: '☁️' })
+        onDone?.('resumed')
         onClose()
       } else if (r.kind === 'created') {
         setCode(r.code)
@@ -214,6 +245,9 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
       } else {
         setSheet(r.sheet)
         setStep('unlock')
+        // a new phone: the password manager may already have the key code
+        const saved = await loadSavedKeyCode()
+        if (saved) setCode(saved)
       }
     } catch (e) {
       setErr(errText(e))
@@ -228,6 +262,7 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
     try {
       const r = await unlockCloud(sheet, code, replace)
       toast(`Synced · ${r.pulled} item${r.pulled === 1 ? '' : 's'}`, { emoji: '☁️' })
+      onDone?.('unlocked')
       onClose()
     } catch (e) {
       setErr(errText(e))
@@ -252,7 +287,13 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
             {busy ? 'Opening Google…' : 'Continue with Google'}
           </Button>
         ) : step === 'created' ? (
-          <Button className="flex-1" onClick={onClose} disabled={!saved}>
+          <Button
+            className="flex-1"
+            onClick={() => {
+              onDone?.('created')
+              onClose()
+            }}
+          >
             Done
           </Button>
         ) : (
@@ -266,7 +307,7 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
         <Points
           column
           items={[
-            restore ? '👤 Use the same Google account' : '🔒 Encrypted on your phone',
+            '🔒 Encrypted on your phone',
             '📄 Only DayNest’s own file',
             '🚫 No DayNest server',
           ]}
@@ -278,19 +319,26 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
           <KeyCodeBox code={code} />
           <Points
             column
-            items={['✍️ Write it down', '🔑 Needed on a new phone', '⚠️ Can’t be reset']}
+            items={['🔑 Needed on a new phone', '👀 Also in Settings → Mode', '⚠️ Can’t be reset']}
           />
-          <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
-            <span>I saved it</span>
-            <Toggle checked={saved} onChange={setSaved} label="I saved it" />
-          </label>
         </div>
       )}
 
       {step === 'unlock' && (
         <div className="grid gap-3 text-sm">
+          {/* username + password fields so phone password managers can fill the key code */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value={KEY_FIELD_USERNAME}
+            readOnly
+            hidden
+          />
           <Field label="Key code">
             <Input
+              type="text"
+              name="password"
               value={code}
               onChange={(e) => {
                 setCode(e.target.value)
@@ -298,7 +346,7 @@ export function CloudFlow({ onClose, restore }: { onClose: () => void; restore?:
               }}
               placeholder="XXXX-XXXX-XXXX-XXXX-XXXX"
               autoCapitalize="characters"
-              autoComplete="off"
+              autoComplete="current-password"
               spellCheck={false}
             />
           </Field>
@@ -365,6 +413,7 @@ export function CloudRunner() {
     if (!on) return
     let timer: ReturnType<typeof setTimeout> | undefined
     const run = () => void syncCloud(false).catch(() => undefined)
+    run()
     const soon = () => {
       clearTimeout(timer)
       timer = setTimeout(run, 8_000)
