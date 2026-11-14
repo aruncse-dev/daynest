@@ -20,6 +20,7 @@ import {
   getToken,
   GoogleSheetStore,
   hasToken,
+  renameFile,
   signOutGoogle,
 } from './google'
 import { syncOnce } from './sync'
@@ -53,8 +54,7 @@ async function syncWith(sheet: string, code: string) {
   const store = new GoogleSheetStore(sheet)
   const { meta } = await store.readAll()
   if (!meta) throw new Error('Sheet is damaged: key details missing')
-  if (meta.v > SHEET_FORMAT)
-    throw new Error('Update DayNest first')
+  if (meta.v > SHEET_FORMAT) throw new Error('Update DayNest first')
   const keys = await keysFor(sheet, code, meta.salt)
   if (!(await keysMatch(keys, meta.check))) throw new Error('Wrong key code')
   const r = await syncOnce(db, store, keys)
@@ -62,9 +62,7 @@ async function syncWith(sheet: string, code: string) {
   // another phone runs a newer DayNest: its newest changes wait here until this one updates
   await setSetting(
     CLOUD_ERROR,
-    r.newer
-      ? `Update DayNest to get ${r.newer} new change${r.newer > 1 ? 's' : ''}`
-      : null,
+    r.newer ? `Update DayNest to get ${r.newer} new change${r.newer > 1 ? 's' : ''}` : null,
   )
   return r
 }
@@ -77,6 +75,21 @@ export async function turnOnCloud(): Promise<TurnOnResult | { kind: 'resumed' }>
   await getToken(true)
   const existing = await findFamilySheet()
   if (existing) return { kind: 'found', sheet: existing }
+  return createNew()
+}
+
+/**
+ * Start over without the old key code: the old family copy is renamed (kept in Drive, never
+ * deleted) and a new one is created with a new key code from this phone's data.
+ */
+export async function startFresh(oldSheet: string) {
+  await getToken(true)
+  const day = new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+  await renameFile(oldSheet, `DayNest family (old, ${day})`)
+  return createNew()
+}
+
+async function createNew(): Promise<{ kind: 'created'; code: string }> {
   const sheet = await createFamilySheet()
   const code = newKeyCode()
   const salt = newSalt()
@@ -103,8 +116,7 @@ export async function unlockCloud(sheet: string, input: string, replace: boolean
   const { meta } = await store.readAll()
   if (!meta) throw new Error('Sheet is damaged: key details missing')
   const keys = await deriveKeys(code, meta.salt)
-  if (!(await keysMatch(keys, meta.check)))
-    throw new Error('Wrong key code')
+  if (!(await keysMatch(keys, meta.check))) throw new Error('Wrong key code')
   cached = { sheet, code, keys }
   if (replace) {
     await db.transaction(

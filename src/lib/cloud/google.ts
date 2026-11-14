@@ -122,6 +122,14 @@ export async function findFamilySheet(): Promise<string | null> {
   return r.files[0]?.id ?? null
 }
 
+/** Rename a file DayNest created (e.g. set an old family copy aside). Nothing is deleted. */
+export async function renameFile(id: string, name: string) {
+  await api(`https://www.googleapis.com/drive/v3/files/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  })
+}
+
 export async function createFamilySheet(): Promise<string> {
   const r = await api<{ spreadsheetId: string }>(SHEETS, {
     method: 'POST',

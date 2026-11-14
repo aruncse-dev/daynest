@@ -28,6 +28,7 @@ import {
   CLOUD_PAUSED,
   CLOUD_SHEET,
   pauseCloud,
+  startFresh,
   resumeCloud,
   syncCloud,
   turnOnCloud,
@@ -292,6 +293,7 @@ export function CloudFlow({
   const [code, setCode] = useState('')
   const [sheet, setSheet] = useState('')
   const [replace, setReplace] = useState(!!restore)
+  const [confirmFresh, setConfirmFresh] = useState(false)
 
   const start = async () => {
     setBusy(true)
@@ -312,6 +314,20 @@ export function CloudFlow({
         const saved = await loadSavedKeyCode()
         if (saved) setCode(saved)
       }
+    } catch (e) {
+      setErr(errText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const fresh = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      const r = await startFresh(sheet)
+      setCode(r.code)
+      setStep('created')
     } catch (e) {
       setErr(errText(e))
     } finally {
@@ -393,6 +409,12 @@ export function CloudFlow({
 
       {step === 'unlock' && (
         <div className="grid gap-3 text-sm">
+          <Points
+            items={[
+              [<IconCloudDone />, 'This Google account already has a DayNest copy'],
+              [<IconKey />, 'Enter the key code from when it was made'],
+            ]}
+          />
           {/* username + password fields so phone password managers can fill the key code */}
           <input
             type="text"
@@ -424,6 +446,21 @@ export function CloudFlow({
             </span>
             <Toggle checked={replace} onChange={setReplace} label="Replace this phone's data" />
           </label>
+          <div className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3">
+            <span className="flex-1">
+              <b className="block text-[13.5px]">New user or lost the code?</b>
+              <small className="text-[11px] text-muted">Old copy stays in Drive, renamed</small>
+            </span>
+            {confirmFresh ? (
+              <Button size="sm" onClick={fresh} disabled={busy}>
+                Yes, start fresh
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setConfirmFresh(true)}>
+                Start fresh
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
