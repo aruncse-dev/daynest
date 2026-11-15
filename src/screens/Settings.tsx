@@ -222,6 +222,14 @@ export function Settings() {
                 />
               </li>
             </ul>
+            <p className="mt-2 flex gap-3 text-xs font-semibold">
+              <a className="text-sage-ink" href="/privacy.html" target="_blank" rel="noreferrer">
+                Privacy policy
+              </a>
+              <a className="text-sage-ink" href="/terms.html" target="_blank" rel="noreferrer">
+                Terms
+              </a>
+            </p>
             <StorageLine />
           </div>
           <div className="flex items-center justify-between gap-3">

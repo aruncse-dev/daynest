@@ -21,7 +21,12 @@ declare const self: ServiceWorkerGlobalScope & {
 // backups/exports are never cached here.
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+// the public privacy/terms pages are plain pages, not the app
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), {
+    denylist: [/^\/(privacy|terms)\.html$/],
+  }),
+)
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting()
