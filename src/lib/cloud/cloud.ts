@@ -57,7 +57,15 @@ async function saveState(sheet: string, code: string) {
   await setSetting(CLOUD_PAUSED, false)
 }
 
-async function syncWith(sheet: string, code: string) {
+/** One sync at a time on this phone (two at once would both upload the same changes). */
+let lock: Promise<unknown> = Promise.resolve()
+function syncWith(sheet: string, code: string) {
+  const run = lock.then(() => syncWithNow(sheet, code))
+  lock = run.catch(() => undefined)
+  return run
+}
+
+async function syncWithNow(sheet: string, code: string) {
   const store = new GoogleSheetStore(sheet)
   const { meta } = await store.readAll()
   if (!meta) throw new Error('Sheet is damaged: key details missing')
@@ -92,7 +100,8 @@ export async function turnOnCloud(): Promise<TurnOnResult | { kind: 'resumed' }>
 export async function startFresh(oldSheet: string) {
   await getToken(true, 'turnOn')
   const day = new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
-  await renameFile(oldSheet, `DayNest family (old, ${day})`)
+  // set the old copy aside (if it can still be reached)
+  await renameFile(oldSheet, `DayNest family (old, ${day})`).catch(() => undefined)
   return createNew()
 }
 
@@ -253,4 +262,16 @@ export async function joinFamily(inv: Invite, replace: boolean) {
   // last: opening the app now finds no pending invite
   await setSetting(SETTING_ONBOARDED, true)
   return r
+}
+
+/**
+ * The linked Sheet can't be reached (e.g. DayNest moved to a new Google project): forget it
+ * on this phone and make a new family copy from this phone's data (all of it is here).
+ */
+export async function newCopyFromPhone() {
+  await getToken(true, 'turnOn')
+  for (const k of [CLOUD_SHEET, CLOUD_CODE, CLOUD_LAST, CLOUD_ERROR, CLOUD_PAUSED])
+    await db.settings.delete(k)
+  cached = null
+  return createNew()
 }

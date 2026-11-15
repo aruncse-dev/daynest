@@ -233,6 +233,9 @@ export function signOutGoogle() {
   setToken(null)
 }
 
+/** The linked family Sheet can't be opened (deleted, or a different Google project now). */
+export const NOT_REACHABLE = 'Family copy not reachable'
+
 async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const t = await getToken(false)
   const res = await fetch(url, {
@@ -240,6 +243,8 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
     headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json', ...init.headers },
   })
   if (res.status === 401) setToken(null)
+  // the file is gone, or this Google setup (project) can't open it any more
+  if (res.status === 404 && /spreadsheets\//.test(url)) throw new Error(NOT_REACHABLE)
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
     throw new Error(body?.error?.message ?? `Google returned ${res.status}`)

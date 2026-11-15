@@ -24,6 +24,7 @@ import {
   getToken,
   googleConfigured,
   hasToken,
+  NOT_REACHABLE,
   peekResume,
   prepareGoogle,
   takeRedirectError,
@@ -40,6 +41,7 @@ import {
   resumeCloud,
   syncCloud,
   turnOnCloud,
+  newCopyFromPhone,
   unlockCloud,
 } from '@/lib/cloud/cloud'
 import { toast } from '@/store/ui'
@@ -143,6 +145,7 @@ export function CloudCard() {
   const [flow, setFlow] = useState(() => peekResume() === 'turnOn')
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
+  const [rebuild, setRebuild] = useState(false)
   if (!googleConfigured()) return null
 
   const run = async (fn: () => Promise<unknown>, ok?: string) => {
@@ -219,6 +222,14 @@ export function CloudCard() {
           </button>
         </div>
       )}
+      {on && error === NOT_REACHABLE && (
+        <div className="flex items-center gap-3 px-3.5 py-2.5 text-[13px]">
+          <span className="flex-1 text-muted">All your data is on this phone</span>
+          <Button size="sm" onClick={() => setRebuild(true)}>
+            New copy from this phone
+          </Button>
+        </div>
+      )}
       {on && (
         <div className="px-3.5 py-2 text-[13px]">
           <div className="flex items-center gap-3">
@@ -239,6 +250,7 @@ export function CloudCard() {
       )}
       {/* stays mounted while the card switches to "on": it still has the key code to show */}
       {flow && <CloudFlow onClose={() => setFlow(false)} />}
+      {rebuild && <CloudFlow rebuild onClose={() => setRebuild(false)} />}
     </section>
   )
 }
@@ -295,11 +307,14 @@ export function CloudFlow({
   onClose,
   onDone,
   restore,
+  rebuild,
 }: {
   onClose: () => void
   /** after success: 'created' (new Sheet), 'unlocked' (existing Sheet) or 'resumed' */
   onDone?: (kind: 'created' | 'unlocked' | 'resumed') => void
   restore?: boolean
+  /** the linked copy can't be reached: make a new one from this phone's data */
+  rebuild?: boolean
 }) {
   const [step, setStep] = useState<'start' | 'created' | 'unlock'>('start')
   const [busy, setBusy] = useState(false)
@@ -315,7 +330,7 @@ export function CloudFlow({
     setBusy(true)
     setErr(null)
     try {
-      const r = await turnOnCloud()
+      const r = rebuild ? await newCopyFromPhone() : await turnOnCloud()
       if (r.kind === 'resumed') {
         toast('Back on · synced', { emoji: '☁️' })
         onDone?.('resumed')
