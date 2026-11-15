@@ -105,6 +105,7 @@ async function rememberAccount(accessToken: string) {
 
 function setToken(t: Token | null) {
   token = t
+  if (t) chooseAccount = false
   try {
     if (t) localStorage.setItem(TOKEN_KEY, JSON.stringify(t))
     else localStorage.removeItem(TOKEN_KEY)
@@ -159,6 +160,42 @@ const write = (k: string, v: string | null) => {
  */
 const refreshToken = () => read(REFRESH_KEY)
 
+/**
+ * A short private log of sign-in steps on this phone (no emails, no tokens), shown under
+ * Settings → More so a screenshot says where a sign-in stopped.
+ */
+const TRACE_KEY = 'daynest.gtrace'
+export function trace(step: string) {
+  try {
+    const t = JSON.parse(read(TRACE_KEY) ?? '[]') as [number, string][]
+    t.push([Date.now(), step.slice(0, 120)])
+    write(TRACE_KEY, JSON.stringify(t.slice(-20)))
+  } catch {
+    /* only a convenience */
+  }
+}
+export function signInTrace(): [number, string][] {
+  try {
+    return JSON.parse(read(TRACE_KEY) ?? '[]') as [number, string][]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Next sign-in: let the person pick the Google account (no remembered email) and replace
+ * whatever sign-in this phone had. Used when joining a family: the phone may still hold
+ * someone else's sign-in (e.g. from setting it up), which must never be used to join.
+ */
+let chooseAccount = false
+function forgetSignInHere() {
+  write(REFRESH_KEY, null)
+  setToken(null)
+  chooseAccount = true
+}
+const hint = (): Record<string, string> =>
+  chooseAccount ? {} : accountHint() ? { login_hint: accountHint()! } : {}
+
 /** Signed in on this phone: a fresh token, or a long sign-in that renews it quietly. */
 export const hasToken = () => tokenValid() || !!refreshToken()
 
@@ -207,6 +244,7 @@ let refreshing: Promise<string> | null = null
 function refreshAccess(interactive: boolean, next: ResumeAction): Promise<string> {
   refreshing ??= (async () => {
     const r = await callTokenFn({ refreshToken: refreshToken() })
+    trace(r.accessToken ? 'renewed quietly' : `renew failed: ${r.error ?? r.status}`)
     if (r.accessToken) {
       keep(r.accessToken, r.expiresIn)
       return r.accessToken
@@ -257,12 +295,14 @@ async function codeSignIn(next: ResumeAction): Promise<never> {
     scope: SCOPE,
     include_granted_scopes: 'true',
     access_type: 'offline', // = a long-lived sign-in
-    prompt: 'consent', // Google only hands out the long sign-in with consent
+    // Google only hands out the long sign-in with consent
+    prompt: chooseAccount ? 'select_account consent' : 'consent',
     code_challenge: challenge,
     code_challenge_method: 'S256',
     state,
-    ...(accountHint() ? { login_hint: accountHint()! } : {}),
+    ...hint(),
   }).toString()
+  trace(`to Google (${next}${chooseAccount ? ', choose account' : ''})`)
   location.assign(u.toString())
   return leaving
 }
@@ -275,7 +315,23 @@ let exchanging: Promise<string> | null = null
 /** What to carry on with after Google sends the person back. */
 export type ResumeAction = 'turnOn' | 'sync' | 'join'
 const REDIRECT_KEY = 'daynest.oauth'
-let resumeAction: ResumeAction | null = null
+const RESUME_KEY = 'daynest.resume'
+/** Kept a few minutes, so a reload right after coming back still carries on. */
+let resumeAction: ResumeAction | null = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(RESUME_KEY) ?? 'null') as {
+      next: ResumeAction
+      at: number
+    } | null
+    return v && Date.now() - v.at < 5 * 60_000 ? v.next : null
+  } catch {
+    return null
+  }
+})()
+function setResume(next: ResumeAction | null) {
+  resumeAction = next
+  write(RESUME_KEY, next ? JSON.stringify({ next, at: Date.now() }) : null)
+}
 let redirectError: string | null = null
 
 /** iPhone/iPad (incl. the Home Screen app): Google's popup is blocked or can't report back. */
@@ -317,8 +373,10 @@ function redirectSignIn(next: ResumeAction): Promise<never> {
     scope: SCOPE,
     include_granted_scopes: 'true',
     state,
-    ...(accountHint() ? { login_hint: accountHint()! } : {}),
+    ...(chooseAccount ? { prompt: 'select_account' } : {}),
+    ...hint(),
   }).toString()
+  trace(`to Google, 1 h (${next})`)
   location.assign(u.toString())
   leaving = new Promise<never>(() => undefined) // the page is leaving
   return leaving
@@ -359,6 +417,7 @@ export function consumeRedirect(): ResumeAction | null {
   if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) {
     // can't match it to a request from this app (e.g. iPhone came back in Safari instead of
     // the Home Screen app): never use such a token, but say so instead of failing silently
+    trace(saved ? 'back: old or unknown sign-in' : 'back: in another window (no request here)')
     redirectError =
       'Sign-in came back in a different window. Open DayNest from where you started (e.g. the Home Screen app) and try again.'
     return null
@@ -378,15 +437,19 @@ export function consumeRedirect(): ResumeAction | null {
       exchanging = null
       return r.accessToken
     })
-    exchanging.catch(() => undefined)
-    resumeAction = saved.next
+    exchanging.then(
+      () => trace('back: long sign-in ready'),
+      (e: unknown) => trace(`back: ${e instanceof Error ? e.message : 'failed'}`),
+    )
+    setResume(saved.next)
     return saved.next
   }
   const access = p.get('access_token')
   if (access) {
     setToken({ value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 })
     void rememberAccount(access)
-    resumeAction = saved.next
+    trace('back: signed in, 1 h')
+    setResume(saved.next)
     return saved.next
   }
   // Google said no: reopen the same screen to show why (without starting again by itself)
@@ -395,7 +458,8 @@ export function consumeRedirect(): ResumeAction | null {
     e === 'access_denied'
       ? 'Google sign-in was cancelled.'
       : `Google sign-in failed: ${p.get('error_description') ?? e}`
-  resumeAction = saved.next
+  trace(`back: ${e}`)
+  setResume(saved.next)
   return null
 }
 
@@ -404,7 +468,7 @@ export const peekResume = () => resumeAction
 /** Take (and clear) the action to resume after a redirect. */
 export function takeResume() {
   const a = resumeAction
-  resumeAction = null
+  setResume(null)
   return a
 }
 /** A sign-in problem to show, without using it up. */
@@ -431,7 +495,13 @@ export function prepareGoogle() {
  * handler (before any await), so browsers allow Google's popup. On iPhone/iPad it goes to
  * Google's page and comes back (`next` says what to carry on with).
  */
-export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Promise<string> {
+export function getToken(
+  interactive: boolean,
+  next: ResumeAction = 'sync',
+  /** from a tap: pick the account again and replace this phone's sign-in (joining a family) */
+  fresh = false,
+): Promise<string> {
+  if (fresh && interactive && !leaving && !pending && !exchanging) forgetSignInHere()
   if (tokenValid()) return Promise.resolve(token!.value)
   if (!CLIENT_ID) return Promise.reject(new Error('Google sign-in is not set up'))
   if (exchanging)
@@ -459,8 +529,9 @@ function legacyToken(interactive: boolean, next: ResumeAction): Promise<string> 
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID!,
       scope: SCOPE,
-      ...(accountHint() ? { login_hint: accountHint() } : {}),
+      ...hint(),
       callback: (r) => {
+        trace(r.access_token ? 'popup: signed in' : `popup: ${r.error ?? 'cancelled'}`)
         if (!r.access_token) {
           reject(new Error(r.error_description || r.error || 'Google sign-in was cancelled.'))
           return
@@ -470,6 +541,7 @@ function legacyToken(interactive: boolean, next: ResumeAction): Promise<string> 
         resolve(r.access_token)
       },
       error_callback: (e) => {
+        trace(`popup: ${e.type}`)
         // blocked popup: go to Google's page instead
         if (interactive && e.type === 'popup_failed_to_open') {
           void redirectSignIn(next)
@@ -480,7 +552,9 @@ function legacyToken(interactive: boolean, next: ResumeAction): Promise<string> 
         )
       },
     })
-    client.requestAccessToken({ prompt: interactive ? '' : 'none' })
+    client.requestAccessToken({
+      prompt: !interactive ? 'none' : chooseAccount ? 'select_account' : '',
+    })
   }).finally(() => {
     pending = null
   })

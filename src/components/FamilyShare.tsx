@@ -295,17 +295,19 @@ export function JoinFlow({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const join = async (inv = invite) => {
+  const join = async (inv = invite, how: 'tap' | 'resume' = 'tap') => {
     if (!inv) return
-    void getToken(true, 'join').catch(() => undefined) // from the tap
     setBusy(true)
     setErr(null)
     try {
-      const r = await joinFamily(inv, replace || (!!linked && linked !== inv.f))
+      // joinFamily asks Google first thing, still inside the tap (so a popup is allowed)
+      const r = await joinFamily(inv, replace || (!!linked && linked !== inv.f), how)
       toast(`Joined · ${r.pulled} item${r.pulled === 1 ? '' : 's'}`, { emoji: '👪' })
       onClose()
     } catch (e) {
-      setErr(errText(e))
+      // back from Google without a sign-in to use: just wait for the tap, no error
+      if (!(how === 'resume' && e instanceof Error && e.message === 'Tap to sync'))
+        setErr(errText(e))
     } finally {
       setBusy(false)
     }
@@ -320,7 +322,7 @@ export function JoinFlow({
       takeResume()
       return
     }
-    if (takeResume() === 'join') void join()
+    if (takeResume() === 'join') void join(invite, 'resume')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
   }, [])
 

@@ -28,6 +28,7 @@ import {
   unshare,
   type Share,
   signOutGoogle,
+  trace,
 } from './google'
 import { syncOnce } from './sync'
 import { clearInvite, inviteLink, type Invite } from './invite'
@@ -250,20 +251,30 @@ export const PICK_NEEDED = 'Tap the DayNest family file to join'
  * tap the shared file once in Google's chooser, then the family copy opens with the key code
  * and this phone becomes the invited person's.
  */
-export async function joinFamily(inv: Invite, replace: boolean) {
-  await getToken(true, 'join')
+export async function joinFamily(
+  inv: Invite,
+  replace: boolean,
+  /** 'tap': choose the Google account now; 'resume': just back from Google's page */
+  how: 'tap' | 'resume' = 'tap',
+) {
+  // always the joiner's own account: never a sign-in this phone had before
+  await getToken(how === 'tap', 'join', how === 'tap')
+  trace('join: signed in')
   // Google remembers the chooser step per Google account: done once anywhere (e.g. on a
   // computer), this phone opens the file straight away. Only otherwise show the chooser.
   const open = await new GoogleSheetStore(inv.f)
     .readAll()
     .then(() => true)
     .catch(() => false)
+  trace(open ? 'join: file opens directly' : 'join: showing Google’s file chooser')
   if (!open) {
     const picked = await pickSharedFile(inv.f)
+    trace(picked ? 'join: file picked' : 'join: chooser closed')
     if (!picked) throw new Error(PICK_NEEDED)
     if (picked !== inv.f) throw new Error('That’s a different file: pick the DayNest family one')
   }
   const r = await unlockCloud(inv.f, inv.k, replace, false)
+  trace('join: done')
   // the invite says who this phone is for: no need to ask
   if (inv.p && (await db.profiles.get(inv.p))) {
     await setSetting(ME_KEY, inv.p)

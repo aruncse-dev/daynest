@@ -47,6 +47,48 @@ describe('long Google sign-in', () => {
     expect(g.hasToken()).toBe(true)
   })
 
+  it('still carries on if the app reloads right after coming back', async () => {
+    localStorage.setItem(
+      'daynest.oauth',
+      JSON.stringify({ state: 's', next: 'join', path: '/', at: Date.now(), verifier: 'v' }),
+    )
+    history.replaceState(null, '', '/?state=s&code=c')
+    const g = await load(async () =>
+      reply({ accessToken: 'at', expiresIn: 3599, refreshToken: 'rt' }),
+    )
+    expect(g.consumeRedirect()).toBe('join')
+    await g.getToken(false)
+    const again = await load(async () => reply({}))
+    expect(again.peekResume()).toBe('join')
+    expect(again.takeResume()).toBe('join')
+    expect((await load(async () => reply({}))).peekResume()).toBeNull()
+  })
+
+  it('joining picks the Google account again instead of reusing this phone’s sign-in', async () => {
+    localStorage.setItem(
+      'daynest.gtoken',
+      JSON.stringify({ value: 'someone-else', expiresAt: Date.now() + 3e6 }),
+    )
+    localStorage.setItem('daynest.grefresh', 'rt-someone-else')
+    localStorage.setItem('daynest.glong', '1')
+    localStorage.setItem('daynest.gaccount', 'someone@example.com')
+    const assign = vi.fn()
+    vi.stubGlobal('location', {
+      ...window.location,
+      assign,
+      origin: location.origin,
+      pathname: '/',
+      search: '',
+    })
+    const g = await load(async () => reply({}))
+    void g.getToken(true, 'join', true)
+    await vi.waitFor(() => expect(assign).toHaveBeenCalled())
+    const u = new URL(assign.mock.calls[0][0] as string)
+    expect(u.searchParams.get('prompt')).toBe('select_account consent')
+    expect(u.searchParams.get('login_hint')).toBeNull()
+    expect(localStorage.getItem('daynest.grefresh')).toBeNull()
+  })
+
   it('renews the hour token quietly with the long sign-in (no tap, no Google page)', async () => {
     localStorage.setItem('daynest.grefresh', 'rt')
     const g = await load(async (url, init) => {

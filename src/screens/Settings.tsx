@@ -30,7 +30,7 @@ import {
 } from '@/components/ui'
 import { CloudCard, useCloud } from '@/components/CloudCard'
 import { FamilySharingSheet } from '@/components/FamilyShare'
-import { familyConfigured } from '@/lib/cloud/google'
+import { familyConfigured, signInTrace } from '@/lib/cloud/google'
 import {
   IconAuto,
   IconBackup,
@@ -235,7 +235,10 @@ export function Settings() {
                 <IconLabel icon={<IconCloud />} text="Google mode: encrypted in your own Drive" />
               </li>
               <li>
-                <IconLabel icon={<IconNoServer />} text="No ads, no tracking, no DayNest server" />
+                <IconLabel
+                  icon={<IconNoServer />}
+                  text="No ads, no tracking; your data never reaches DayNest"
+                />
               </li>
               <li>
                 <IconLabel
@@ -254,6 +257,7 @@ export function Settings() {
             </p>
             <StorageLine />
           </div>
+          <SignInLog />
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] text-muted">
               data v{SCHEMA_VERSION} ·{' '}
@@ -687,5 +691,30 @@ function ImportDialog({
         untouched.
       </p>
     </Sheet>
+  )
+}
+
+/** The last Google sign-in steps on this phone (no emails or tokens): for a screenshot. */
+function SignInLog() {
+  const [steps] = useState(signInTrace)
+  if (!steps.length) return null
+  return (
+    <details className="rounded-[18px] border border-line bg-surface px-3.5 py-2.5 text-xs">
+      <summary className="cursor-pointer font-semibold text-muted">Google sign-in log</summary>
+      <ol className="mt-1.5 grid gap-0.5 font-mono text-[11px] text-muted">
+        {steps.map(([t, s], i) => (
+          <li key={i}>
+            {new Date(t).toLocaleString([], {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}{' '}
+            · {s}
+          </li>
+        ))}
+      </ol>
+    </details>
   )
 }
