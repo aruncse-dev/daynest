@@ -1,6 +1,7 @@
 import { db } from '@/db/db'
 import { getSetting } from '@/db/actions'
 import { linkedStillDue } from '@/db/links'
+import { ringsHere } from './me'
 import type { Reminder } from '@/db/types'
 import { addLocalDays, parseLocalDate, toLocalDate, todayLocal } from './date'
 import { DEFAULT_QUIET, isQuietTime, QUIET_KEY, type QuietHours } from './quietHours'
@@ -18,7 +19,8 @@ function muted(r: Reminder, at: Date, quiet: QuietHours) {
  * This list — and nothing about what the reminders say — is all the push server ever sees.
  */
 export async function computeSlots(now = new Date(), days = SCHEDULE_DAYS): Promise<number[]> {
-  const reminders = await db.reminders.filter((r) => r.enabled).toArray()
+  const rings = await ringsHere()
+  const reminders = await db.reminders.filter((r) => r.enabled && rings(r)).toArray()
   const quiet = await getSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
   const end = now.getTime() + days * 86_400_000
   const out = new Set<number>()
@@ -47,7 +49,8 @@ export async function remindersDueAt(atMs: number): Promise<Reminder[]> {
   const minute = minuteOf(at)
   const day = toLocalDate(at)
   const quiet = await getSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
-  const reminders = await db.reminders.filter((r) => r.enabled).toArray()
+  const rings = await ringsHere()
+  const reminders = await db.reminders.filter((r) => r.enabled && rings(r)).toArray()
   const out: Reminder[] = []
   for (const r of reminders) {
     const snoozeHit = !!r.snoozedUntil && minuteOf(new Date(r.snoozedUntil)) === minute

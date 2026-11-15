@@ -11,7 +11,13 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.file'
 export const SHEET_NAME = 'DayNest family (encrypted)'
 const SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
 
+const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined
+/** Google Cloud project number (the Picker calls it the app id). */
+const APP_ID = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined
+
 export const googleConfigured = () => !!CLIENT_ID
+/** Joining a family needs Google's file chooser (Picker), which needs an API key. */
+export const familyConfigured = () => !!CLIENT_ID && !!API_KEY && !!APP_ID
 
 interface TokenResponse {
   access_token?: string
@@ -64,7 +70,7 @@ export const hasToken = () => !!token && token.expiresAt > Date.now() + 60_000
 /* ---------- Redirect sign-in (iPhone/iPad, or when a popup is blocked) ---------- */
 
 /** What to carry on with after Google sends the person back. */
-export type ResumeAction = 'turnOn' | 'sync'
+export type ResumeAction = 'turnOn' | 'sync' | 'join'
 const REDIRECT_KEY = 'daynest.oauth'
 let resumeAction: ResumeAction | null = null
 let redirectError: string | null = null
@@ -322,4 +328,119 @@ export class GoogleSheetStore implements CloudStore {
         { method: 'POST', body: JSON.stringify({ values: appends.map(line) }) },
       )
   }
+}
+
+/* ---------- Family sharing (owner side) ---------- */
+
+export interface Share {
+  id: string
+  email: string
+  name?: string
+  role: string
+}
+
+/** Share the family file with someone's own Google account (they can read and write it). */
+export async function shareFile(fileId: string, email: string) {
+  const q = new URLSearchParams({
+    sendNotificationEmail: 'true',
+    emailMessage: 'You were invited to a DayNest family. Open the invite link you were sent.',
+  })
+  await api(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?${q}`, {
+    method: 'POST',
+    body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: email.trim() }),
+  })
+}
+
+/** People the family file is shared with (not the owner). */
+export async function listShares(fileId: string): Promise<Share[]> {
+  const r = await api<{
+    permissions?: { id: string; emailAddress?: string; displayName?: string; role: string }[]
+  }>(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?fields=permissions(id,emailAddress,displayName,role)`,
+  )
+  return (r.permissions ?? [])
+    .filter((p) => p.role !== 'owner' && p.emailAddress)
+    .map((p) => ({ id: p.id, email: p.emailAddress!, name: p.displayName, role: p.role }))
+}
+
+export async function unshare(fileId: string, permissionId: string) {
+  const t = await getToken(false)
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions/${permissionId}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } },
+  )
+  if (!res.ok && res.status !== 404) throw new Error(`Google returned ${res.status}`)
+}
+
+/* ---------- Family sharing (joining side): Google's file chooser ---------- */
+
+/** The small part of Google's Picker that DayNest uses. */
+interface PickerBuilder {
+  addView(v: unknown): PickerBuilder
+  setOAuthToken(t: string): PickerBuilder
+  setDeveloperKey(k: string): PickerBuilder
+  setAppId(id: string): PickerBuilder
+  setTitle(t: string): PickerBuilder
+  setCallback(cb: (d: { action: string; docs?: { id: string }[] }) => void): PickerBuilder
+  build(): { setVisible(v: boolean): void }
+}
+interface PickerApi {
+  PickerBuilder: new () => PickerBuilder
+  DocsView: new (viewId?: string) => {
+    setFileIds(ids: string): unknown
+    setMode(m: string): unknown
+  }
+  ViewId: { SPREADSHEETS: string }
+  DocsViewMode: { LIST: string }
+  Action: { PICKED: string; CANCEL: string }
+}
+declare global {
+  interface Window {
+    gapi?: { load(name: string, cb: () => void): void }
+  }
+}
+
+let pickerLoading: Promise<PickerApi> | null = null
+function loadPicker(): Promise<PickerApi> {
+  const ready = () => (window.google as unknown as { picker?: PickerApi })?.picker
+  if (ready()) return Promise.resolve(ready()!)
+  pickerLoading ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = 'https://apis.google.com/js/api.js'
+    s.async = true
+    s.onload = () => window.gapi!.load('picker', () => resolve(ready()!))
+    s.onerror = () => {
+      pickerLoading = null
+      reject(new Error('Could not reach Google. Check your connection.'))
+    }
+    document.head.appendChild(s)
+  })
+  return pickerLoading
+}
+
+/**
+ * Let the person pick the family file someone shared with them (Google only lets DayNest open
+ * it after this one tap). Shows just that file. Resolves with the picked file id, or null.
+ */
+export async function pickSharedFile(fileId: string): Promise<string | null> {
+  if (!API_KEY || !APP_ID) throw new Error('Joining a family is not set up yet')
+  const t = await getToken(false)
+  const picker = await loadPicker()
+  return new Promise((resolve) => {
+    const view = new picker.DocsView(picker.ViewId.SPREADSHEETS)
+    view.setFileIds(fileId)
+    view.setMode(picker.DocsViewMode.LIST)
+    new picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(t)
+      .setDeveloperKey(API_KEY)
+      .setAppId(APP_ID)
+      .setTitle('Tap the DayNest family file')
+      .setCallback((d) => {
+        if (d.action === picker.Action.PICKED) resolve(d.docs?.[0]?.id ?? null)
+        else if (d.action === picker.Action.CANCEL) resolve(null)
+      })
+      .build()
+      .setVisible(true)
+  })
 }

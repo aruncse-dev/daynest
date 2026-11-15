@@ -51,6 +51,8 @@ export const LOCAL_ONLY_SETTINGS = new Set([
   'cloudLastSync',
   'cloudError',
   'cloudPaused',
+  'meProfileId',
+  'ringFor',
   'backupFolderHandle',
   'pushEnabled',
   'pushDevice',

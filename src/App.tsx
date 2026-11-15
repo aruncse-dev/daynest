@@ -10,6 +10,8 @@ import { AppShell } from '@/components/layout/AppShell'
 import { ReminderRunner } from '@/components/layout/ReminderRunner'
 import { PushSync } from '@/components/layout/PushSync'
 import { CloudRunner } from '@/components/CloudCard'
+import { InviteHost } from '@/components/FamilyShare'
+import { familyConfigured } from '@/lib/cloud/google'
 import { Skeleton } from '@/components/ui'
 import { Today } from '@/screens/Today'
 import { Setup } from '@/screens/Setup'
@@ -75,6 +77,7 @@ export default function App() {
           <ReminderRunner />
           <PushSync />
           <CloudRunner />
+          {familyConfigured() && <InviteHost />}
           <Suspense
             fallback={
               <div className="mx-auto max-w-[480px] p-4">

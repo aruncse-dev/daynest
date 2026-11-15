@@ -21,9 +21,16 @@ import {
   GoogleSheetStore,
   hasToken,
   renameFile,
+  listShares,
+  pickSharedFile,
+  shareFile,
+  unshare,
+  type Share,
   signOutGoogle,
 } from './google'
 import { syncOnce } from './sync'
+import { clearInvite, inviteLink, type Invite } from './invite'
+import { ME_KEY, RING_KEY } from '@/lib/me'
 
 export const CLOUD_SHEET = 'cloudSheetId'
 export const CLOUD_CODE = 'cloudKeyCode'
@@ -109,7 +116,13 @@ async function createNew(): Promise<{ kind: 'created'; code: string }> {
  * Open an existing family Sheet with its key code. `replace` swaps this phone's data for the
  * family copy (best on a new phone); otherwise both are combined.
  */
-export async function unlockCloud(sheet: string, input: string, replace: boolean) {
+export async function unlockCloud(
+  sheet: string,
+  input: string,
+  replace: boolean,
+  /** false: the caller finishes setting up the phone, then opens the app itself */
+  enterApp = true,
+) {
   const code = normalizeKeyCode(input)
   if (!code) throw new Error('Key code = 20 letters/numbers')
   const store = new GoogleSheetStore(sheet)
@@ -130,7 +143,7 @@ export async function unlockCloud(sheet: string, input: string, replace: boolean
   }
   await saveState(sheet, code)
   const r = await syncWith(sheet, code)
-  await setSetting(SETTING_ONBOARDED, true)
+  if (enterApp) await setSetting(SETTING_ONBOARDED, true)
   return r
 }
 
@@ -178,4 +191,57 @@ export async function turnOffCloud() {
     await db.settings.delete(k)
   cached = null
   signOutGoogle()
+}
+
+/* ---------- Family: invite (owner) and join (new phone) ---------- */
+
+/** Share the family file with someone's own Google email and make their invite link. */
+export async function inviteToFamily(profileId: string, email: string) {
+  const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
+  const code = await getSetting<string | null>(CLOUD_CODE, null)
+  if (!sheet || !code) throw new Error('Turn on Google mode first')
+  if (!/^\S+@\S+\.\S+$/.test(email.trim())) throw new Error('Check the email')
+  await getToken(true)
+  await shareFile(sheet, email)
+  const me = (await db.profiles.toArray()).find((p) => p.isPrimary)
+  return inviteLink({ f: sheet, k: code, p: profileId, n: me?.name })
+}
+
+/** The invite link again (for someone already shared with), without sharing anew. */
+export async function inviteLinkFor(profileId: string) {
+  const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
+  const code = await getSetting<string | null>(CLOUD_CODE, null)
+  if (!sheet || !code) return null
+  const me = (await db.profiles.toArray()).find((p) => p.isPrimary)
+  return inviteLink({ f: sheet, k: code, p: profileId, n: me?.name })
+}
+
+export async function familyShares(): Promise<Share[]> {
+  const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
+  return sheet ? listShares(sheet) : []
+}
+
+/** Stop sharing the family file with someone. */
+export async function removeFromFamily(permissionId: string) {
+  const sheet = await getSetting<string | null>(CLOUD_SHEET, null)
+  if (sheet) await unshare(sheet, permissionId)
+}
+
+/**
+ * Join with an invite on a new phone (from a tap): sign in with your own Google account,
+ * tap the shared file once in Google's chooser, then the family copy opens with the key code
+ * and this phone becomes the invited person's.
+ */
+export async function joinFamily(inv: Invite, replace: boolean) {
+  await getToken(true, 'join')
+  const picked = await pickSharedFile(inv.f)
+  if (!picked) throw new Error('Tap the DayNest family file to join')
+  if (picked !== inv.f) throw new Error('That’s a different file: pick the DayNest family one')
+  const r = await unlockCloud(inv.f, inv.k, replace, false)
+  if (inv.p && (await db.profiles.get(inv.p))) await setSetting(ME_KEY, inv.p)
+  await setSetting(RING_KEY, 'mine')
+  clearInvite()
+  // last: opening the app now finds no pending invite
+  await setSetting(SETTING_ONBOARDED, true)
+  return r
 }

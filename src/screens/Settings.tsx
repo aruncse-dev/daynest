@@ -27,12 +27,15 @@ import {
   Sheet,
   Toggle,
 } from '@/components/ui'
-import { CloudCard } from '@/components/CloudCard'
+import { CloudCard, useCloud } from '@/components/CloudCard'
+import { FamilySharingSheet } from '@/components/FamilyShare'
+import { familyConfigured } from '@/lib/cloud/google'
 import {
   IconAuto,
   IconBackup,
   IconCloud,
   IconDark,
+  IconJoin,
   IconLight,
   IconLook,
   IconMore,
@@ -52,7 +55,7 @@ import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 
 /** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
-type Panel = 'look' | 'night' | 'backup' | 'more'
+type Panel = 'look' | 'night' | 'backup' | 'more' | 'family'
 
 /** Settings: a few rows; each opens a small sheet. */
 export function Settings() {
@@ -72,6 +75,7 @@ export function Settings() {
   )
   const navigate = useNavigate()
   const [panel, setPanel] = useState<Panel | null>(null)
+  const cloud = useCloud()
   const [tour, setTour] = useState(false)
   const close = () => setPanel(null)
 
@@ -99,6 +103,14 @@ export function Settings() {
       <CloudCard />
 
       <Group>
+        {familyConfigured() && (
+          <NavRow
+            icon={<IconJoin />}
+            title="Family sharing"
+            sub={cloud.on ? 'Invite · who has access' : 'Join a family'}
+            onClick={() => setPanel('family')}
+          />
+        )}
         <NavRow
           icon={<IconLook />}
           title="Look & sound"
@@ -155,6 +167,8 @@ export function Settings() {
           </label>
         </Sheet>
       )}
+
+      {panel === 'family' && <FamilySharingSheet onClose={close} />}
 
       {panel === 'night' && (
         <Sheet title="Phone-free nights" onClose={close}>

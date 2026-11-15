@@ -91,6 +91,16 @@ One-time setup for the app owner (free, no card):
 4. **Clients → Create client → Web application**. Authorized JavaScript origin: `https://daynestapp.vercel.app`. Authorized redirect URI: `https://daynestapp.vercel.app/` (iPhone/iPad sign in by redirect, not a popup). Copy the **Client ID**.
 5. Vercel → Settings → Environment Variables: `VITE_GOOGLE_CLIENT_ID` = that Client ID (public by design), then redeploy.
 
+### Family sharing (optional): everyone with their own Google account
+
+Settings → **Family sharing** → **Invite someone**: pick the person, type **their own** Google email → DayNest shares the family file with them and shows a **QR / link**. They scan it with the phone camera (or paste the link under **Join a family** on the welcome screen), sign in with their own Google account, tap the family file once in Google's chooser, and their phone becomes theirs ("Me") with the same family data. Each phone chooses whose reminders ring there.
+
+Extra one-time setup (same Google Cloud project, free):
+
+1. **APIs & Services → Library**: enable **Google Picker API**.
+2. **Credentials → Create credentials → API key**: restrict to websites `https://daynestapp.vercel.app/*` and to the Picker API.
+3. Vercel → Environment Variables: `VITE_GOOGLE_API_KEY` = that key, `VITE_GOOGLE_APP_ID` = the project **number** (Dashboard). Redeploy.
+
 ## Your data
 
 - Saved only in this phone's browser storage. Clearing browser data erases it, so use **Settings → Backup** (JSON export/import with preview, merge or replace, all-or-nothing; optional daily folder snapshots on Chrome/Android).

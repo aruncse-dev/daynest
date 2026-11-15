@@ -42,4 +42,11 @@ export {
   MdOutlineDescription as IconFile,
   MdOutlineVolumeUp as IconSound,
   MdOutlineCheckCircle as IconOk,
+  MdOutlinePersonAdd as IconInvite,
+  MdOutlineQrCode2 as IconQr,
+  MdOutlineShare as IconShare,
+  MdOutlineLink as IconLink,
+  MdOutlineGroupAdd as IconJoin,
+  MdOutlinePersonRemove as IconRemovePerson,
+  MdOutlineMail as IconMail,
 } from 'react-icons/md'

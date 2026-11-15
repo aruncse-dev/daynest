@@ -1,7 +1,9 @@
 import { CloudFlow } from '@/components/CloudCard'
-import { googleConfigured, peekResume, prepareGoogle } from '@/lib/cloud/google'
+import { familyConfigured, googleConfigured, peekResume, prepareGoogle } from '@/lib/cloud/google'
+import { pendingInvite } from '@/lib/cloud/invite'
+import { JoinFlow } from '@/components/FamilyShare'
 import { useEffect, useState, type ReactNode } from 'react'
-import { IconCloud, IconPhone, IconPlay } from '@/components/icons'
+import { IconCloud, IconJoin, IconPhone, IconPlay } from '@/components/icons'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { setSetting } from '@/db/actions'
@@ -360,6 +362,9 @@ function StepShell({
 function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
   // back from Google's page: reopen Google mode to finish
   const [google, setGoogle] = useState(() => peekResume() === 'turnOn')
+  // an opened invite link (or back from Google mid-join): joining is the main action
+  const invite = familyConfigured() ? pendingInvite() : null
+  const [join, setJoin] = useState(() => peekResume() === 'join' || !!invite)
   useEffect(() => prepareGoogle(), [])
   return (
     <div className="grid h-full place-items-center text-center">
@@ -375,6 +380,14 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
         <p className="mt-2 text-muted">Your day, habits and family. 🌿</p>
 
         <div className="mt-7 grid gap-2.5 text-left">
+          {invite && (
+            <ModeButton
+              icon={<IconJoin />}
+              title={invite.n ? `Join ${invite.n}’s family` : 'Join a family'}
+              points={['Your own Google account', 'Same family data']}
+              onClick={() => setJoin(true)}
+            />
+          )}
           <ModeButton
             icon={<IconPhone />}
             title="Phone mode"
@@ -397,9 +410,19 @@ function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void 
         >
           <IconPlay className="text-lg" /> 30-second tour
         </button>
+        {familyConfigured() && !invite && (
+          <button
+            type="button"
+            onClick={() => setJoin(true)}
+            className="mt-1 flex w-full items-center justify-center gap-1.5 text-sm font-semibold text-sage-ink"
+          >
+            <IconJoin className="text-lg" /> Have an invite? Join a family
+          </button>
+        )}
         {googleConfigured() && (
           <p className="mt-1 text-[11px] text-muted">Change mode anytime in Settings</p>
         )}
+        {join && <JoinFlow onClose={() => setJoin(false)} />}
         {/* Google: an existing family copy opens straight into the app; a new one continues setup */}
         {google && (
           <CloudFlow

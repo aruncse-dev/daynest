@@ -8,6 +8,7 @@ import { useUI } from '@/store/ui'
 import { getSetting } from '@/db/actions'
 import { linkedStillDue } from '@/db/links'
 import { richReminder } from '@/lib/notifyRich'
+import { ringsHere } from '@/lib/me'
 
 const TICK_MS = 20_000
 
@@ -28,7 +29,8 @@ export function ReminderRunner() {
         const now = new Date()
         const quiet = await getSetting<QuietHours>(QUIET_KEY, DEFAULT_QUIET)
         const muted = quiet.muteNudges && isQuietTime(quiet, now)
-        const reminders = await db.reminders.filter((r) => r.enabled).toArray()
+        const rings = await ringsHere()
+        const reminders = await db.reminders.filter((r) => r.enabled && rings(r)).toArray()
         for (const r of reminders) {
           const due = dueReminder(r, now)
           if (!due) continue

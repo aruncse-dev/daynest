@@ -4,6 +4,7 @@ import { db } from '@/db/db'
 import { todayLocal } from './date'
 import type { Profile } from '@/db/types'
 import { useUI } from '@/store/ui'
+import { ME_KEY } from './me'
 
 /** Current local date that rolls over at midnight (and when the tab becomes visible). */
 export function useToday(): string {
@@ -45,15 +46,21 @@ export function useOnline(): boolean {
   )
 }
 
+/**
+ * Everyone on this phone, "Me" first. In a shared family each phone has its own "Me"
+ * (a per-phone setting), so `isPrimary` here means "this phone's person".
+ */
 export function useProfiles(): Profile[] | undefined {
-  return useLiveQuery(
-    async () =>
-      (await db.profiles.filter((p) => !p.archivedAt).toArray()).sort(
-        (a, b) =>
-          Number(!!b.isPrimary) - Number(!!a.isPrimary) || a.createdAt.localeCompare(b.createdAt),
-      ),
-    [],
-  )
+  return useLiveQuery(async () => {
+    const meId = (await db.settings.get(ME_KEY))?.value as string | undefined
+    let list = await db.profiles.filter((p) => !p.archivedAt).toArray()
+    if (meId && list.some((p) => p.id === meId))
+      list = list.map((p) => ({ ...p, isPrimary: p.id === meId }))
+    return list.sort(
+      (a, b) =>
+        Number(!!b.isPrimary) - Number(!!a.isPrimary) || a.createdAt.localeCompare(b.createdAt),
+    )
+  }, [])
 }
 
 export function useProfileMap(): Map<string, Profile> {

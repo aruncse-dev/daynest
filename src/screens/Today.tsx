@@ -52,6 +52,7 @@ import {
   type QuietHours,
 } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
+import { ME_KEY } from '@/lib/me'
 import { toast, useUI } from '@/store/ui'
 import { Button, LinkButton, Panel, Skeleton, cx } from '@/components/ui'
 import { EventRow } from '@/components/rows'
@@ -325,8 +326,17 @@ function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
   const night = addLocalDays(today, -1)
 
   const data = useLiveQuery(async () => {
+    // this phone's person (in a shared family each phone has its own "Me")
+    const meId =
+      ((await db.settings.get(ME_KEY))?.value as string | undefined) ??
+      (await db.profiles.filter((p) => !!p.isPrimary).first())?.id
     const habit = await db.habits
-      .filter((h) => h.templateKey === 'phone-free-night' && h.status === 'active')
+      .filter(
+        (h) =>
+          h.templateKey === 'phone-free-night' &&
+          h.status === 'active' &&
+          (!h.profileId || h.profileId === meId),
+      )
       .first()
     const doneLastNight = habit
       ? !!(await db.habitEntries.where('[habitId+localDate]').equals([habit.id, night]).first())
@@ -345,7 +355,7 @@ function HelperCard({ today, now }: { today: LocalDate; now: Date }) {
       .reverse()
       .filter((b) => b.status === 'success')
       .first()
-    const me = await db.profiles.filter((p) => !!p.isPrimary).first()
+    const me = meId ? await db.profiles.get(meId) : undefined
     const items = (await db.tasks.count()) + (await db.habits.count())
     return { habit, doneLastNight, open, lastBackup, since: me?.createdAt, items }
   }, [today, night])
