@@ -11,6 +11,7 @@ import {
   familyShares,
   inviteToFamily,
   joinFamily,
+  PICK_NEEDED,
   removeFromFamily,
 } from '@/lib/cloud/cloud'
 import {
@@ -31,6 +32,7 @@ import {
   IconCopy,
   IconFile,
   IconInvite,
+  IconLaptop,
   IconLock,
   IconMail,
   IconPhone,
@@ -412,6 +414,14 @@ export function JoinFlow({
         <p className="flex items-center gap-1.5 rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">
           <IconWarning className="text-base" /> {err}
         </p>
+      )}
+      {/* iPhone blocks the cookies Google's file chooser needs: do that one step elsewhere */}
+      {err === PICK_NEEDED && isIOSDevice() && (
+        <ul className="grid gap-2 rounded-xl bg-surface2 p-3 text-xs">
+          <li className="font-semibold">Chooser blank or a cookie error?</li>
+          <Line icon={<IconLaptop />} text="Open the invite on a computer, sign in, tap the file" />
+          <Line icon={<IconPhone />} text="Back here: Continue with Google (no chooser now)" />
+        </ul>
       )}
     </Sheet>
   )

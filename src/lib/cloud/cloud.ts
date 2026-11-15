@@ -243,6 +243,8 @@ export async function removeFromFamily(permissionId: string) {
   if (sheet) await unshare(sheet, permissionId)
 }
 
+export const PICK_NEEDED = 'Tap the DayNest family file to join'
+
 /**
  * Join with an invite on a new phone (from a tap): sign in with your own Google account,
  * tap the shared file once in Google's chooser, then the family copy opens with the key code
@@ -250,9 +252,17 @@ export async function removeFromFamily(permissionId: string) {
  */
 export async function joinFamily(inv: Invite, replace: boolean) {
   await getToken(true, 'join')
-  const picked = await pickSharedFile(inv.f)
-  if (!picked) throw new Error('Tap the DayNest family file to join')
-  if (picked !== inv.f) throw new Error('That’s a different file: pick the DayNest family one')
+  // Google remembers the chooser step per Google account: done once anywhere (e.g. on a
+  // computer), this phone opens the file straight away. Only otherwise show the chooser.
+  const open = await new GoogleSheetStore(inv.f)
+    .readAll()
+    .then(() => true)
+    .catch(() => false)
+  if (!open) {
+    const picked = await pickSharedFile(inv.f)
+    if (!picked) throw new Error(PICK_NEEDED)
+    if (picked !== inv.f) throw new Error('That’s a different file: pick the DayNest family one')
+  }
   const r = await unlockCloud(inv.f, inv.k, replace, false)
   // the invite says who this phone is for: no need to ask
   if (inv.p && (await db.profiles.get(inv.p))) {

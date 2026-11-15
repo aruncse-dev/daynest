@@ -17,6 +17,7 @@ export {
   MdOutlineBackup as IconBackup,
   MdOutlineInfo as IconMore,
   MdOutlineSmartphone as IconPhone,
+  MdOutlineLaptop as IconLaptop,
   MdOutlineCloud as IconCloud,
   MdOutlineCloudDone as IconCloudDone,
   MdOutlineCloudOff as IconCloudOff,
