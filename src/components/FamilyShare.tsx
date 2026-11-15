@@ -18,6 +18,7 @@ import {
   peekResume,
   prepareGoogle,
   redirectSignInNeeded,
+  takeRedirectError,
   takeResume,
   type Share,
 } from '@/lib/cloud/google'
@@ -311,6 +312,12 @@ export function JoinFlow({
   useEffect(() => {
     prepareGoogle()
     // back from Google's page (iPhone): carry on without another tap
+    const e = takeRedirectError()
+    if (e) {
+      setErr(e)
+      takeResume()
+      return
+    }
     if (takeResume() === 'join') void join()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
   }, [])

@@ -355,7 +355,12 @@ export function CloudFlow({
   useEffect(() => {
     prepareGoogle()
     const e = takeRedirectError()
-    if (e) setErr(e)
+    if (e) {
+      // came back from Google with a problem: show it, don't start again by itself
+      setErr(e)
+      takeResume()
+      return
+    }
     // back from Google's page: carry on without another tap
     if (takeResume() === 'turnOn') void start()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open

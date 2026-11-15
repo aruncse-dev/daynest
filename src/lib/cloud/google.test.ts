@@ -40,3 +40,27 @@ describe('coming back from Google’s sign-in page', () => {
     expect(location.hash).toBe('#section')
   })
 })
+
+describe('when Google sends the person back with a problem', () => {
+  it('a refusal reopens the same screen with the reason, without signing in', async () => {
+    const g = await import('./google')
+    localStorage.setItem(
+      'daynest.oauth',
+      JSON.stringify({ state: 's2', next: 'turnOn', path: '/', at: Date.now() }),
+    )
+    history.replaceState(null, '', '/#error=access_denied&state=s2')
+    expect(g.consumeRedirect()).toBeNull()
+    expect(g.peekResume()).toBe('turnOn') // reopen to show it
+    expect(g.takeRedirectError()).toBe('Google sign-in was cancelled.')
+    g.takeResume()
+  })
+
+  it('a return this app did not ask for is never used, but explained', async () => {
+    const g = await import('./google')
+    localStorage.removeItem('daynest.oauth')
+    history.replaceState(null, '', '/#access_token=x&expires_in=3600&state=zzz')
+    expect(g.consumeRedirect()).toBeNull()
+    expect(g.takeRedirectError()).toMatch(/different window/)
+    expect(location.hash).toBe('')
+  })
+})

@@ -1,5 +1,11 @@
 import { CloudFlow } from '@/components/CloudCard'
-import { familyConfigured, googleConfigured, peekResume, prepareGoogle } from '@/lib/cloud/google'
+import {
+  familyConfigured,
+  googleConfigured,
+  peekRedirectError,
+  peekResume,
+  prepareGoogle,
+} from '@/lib/cloud/google'
 import { pendingInvite } from '@/lib/cloud/invite'
 import { JoinFlow } from '@/components/FamilyShare'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -361,7 +367,9 @@ function StepShell({
 
 function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
   // back from Google's page: reopen Google mode to finish
-  const [google, setGoogle] = useState(() => peekResume() === 'turnOn')
+  const [google, setGoogle] = useState(
+    () => peekResume() === 'turnOn' || (!peekResume() && !!peekRedirectError()),
+  )
   // an opened invite link (or back from Google mid-join): joining is the main action
   const invite = familyConfigured() ? pendingInvite() : null
   const [join, setJoin] = useState(() => peekResume() === 'join' || !!invite)

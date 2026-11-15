@@ -187,7 +187,13 @@ export function consumeRedirect(): ResumeAction | null {
     /* ignore */
   }
   history.replaceState(null, '', saved?.path ?? location.pathname + location.search)
-  if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) return null
+  if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) {
+    // can't match it to a request from this app (e.g. iPhone came back in Safari instead of
+    // the Home Screen app): never use such a token, but say so instead of failing silently
+    redirectError =
+      'Sign-in came back in a different window. Open DayNest from where you started (e.g. the Home Screen app) and try again.'
+    return null
+  }
   const access = p.get('access_token')
   if (access) {
     setToken({ value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 })
@@ -195,8 +201,13 @@ export function consumeRedirect(): ResumeAction | null {
     resumeAction = saved.next
     return saved.next
   }
+  // Google said no: reopen the same screen to show why (without starting again by itself)
+  const e = p.get('error')
   redirectError =
-    p.get('error') === 'access_denied' ? 'Google sign-in was cancelled.' : p.get('error')
+    e === 'access_denied'
+      ? 'Google sign-in was cancelled.'
+      : `Google sign-in failed: ${p.get('error_description') ?? e}`
+  resumeAction = saved.next
   return null
 }
 
@@ -208,6 +219,8 @@ export function takeResume() {
   resumeAction = null
   return a
 }
+/** A sign-in problem to show, without using it up. */
+export const peekRedirectError = () => redirectError
 export function takeRedirectError() {
   const e = redirectError
   redirectError = null
