@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import type { Reminder } from '@/db/types'
@@ -6,6 +6,8 @@ import { db } from '@/db/db'
 import { nowIso } from '@/lib/date'
 import { canCompleteFromReminder, completeLinked } from '@/db/links'
 import { smileLine } from '@/lib/wellness'
+import { nextTimeOfDay, SNOOZE_MINUTES, snoozeLabel } from '@/lib/snooze'
+import { syncPush } from '@/lib/push'
 import { toast, useUI } from '@/store/ui'
 import { cx } from '@/components/ui'
 
@@ -102,14 +104,87 @@ function useActions(r: Reminder) {
       dismiss(r.id)
       if (await completeLinked(r)) toast(`${r.title} — done!`, { emoji: '🌟' })
     },
-    snooze: async () => {
-      await db.reminders.update(r.id, {
-        snoozedUntil: new Date(Date.now() + 10 * 60_000).toISOString(),
-        updatedAt: nowIso(),
-      })
+    /** Remind again at `until` (also reschedules reminders that ring while DayNest is closed). */
+    snooze: async (until: Date) => {
+      await db.reminders.update(r.id, { snoozedUntil: until.toISOString(), updatedAt: nowIso() })
       dismiss(r.id)
+      toast(`Reminder at ${until.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`, {
+        emoji: '⏰',
+      })
+      void syncPush().catch(() => undefined)
     },
   }
+}
+
+/** Snooze: 10 min · 30 min · 1 h · Pick time. */
+function SnoozePicker({
+  onSnooze,
+  light,
+  compact,
+}: {
+  onSnooze: (until: Date) => void
+  /** on a dark (night) card */
+  light?: boolean
+  compact?: boolean
+}) {
+  const [custom, setCustom] = useState(false)
+  const [time, setTime] = useState('')
+  const chip = cx(
+    'min-h-9 flex-1 whitespace-nowrap rounded-xl px-1.5 text-xs font-bold transition active:scale-95',
+    light ? 'bg-white/15' : 'bg-white/60',
+  )
+  return (
+    <div className={cx('grid gap-2', !compact && 'mt-1')}>
+      {!compact && (
+        <div className="text-[11px] font-bold uppercase tracking-wider opacity-60">Snooze</div>
+      )}
+      <div className="flex gap-1.5">
+        {SNOOZE_MINUTES.map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={chip}
+            onClick={() => onSnooze(new Date(Date.now() + m * 60_000))}
+          >
+            {snoozeLabel(m)}
+          </button>
+        ))}
+        <button
+          type="button"
+          className={cx(chip, custom && 'ring-2 ring-current')}
+          onClick={() => setCustom(!custom)}
+          aria-expanded={custom}
+        >
+          Time…
+        </button>
+      </div>
+      {custom && (
+        <div className="flex gap-1.5">
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            aria-label="Remind me at"
+            className={cx(
+              'min-h-10 flex-1 rounded-xl px-3 text-sm text-[#202820] outline-none',
+              'border border-black/10 bg-white',
+            )}
+          />
+          <button
+            type="button"
+            disabled={!time}
+            className={cx(chip, 'flex-none px-4 disabled:opacity-40')}
+            onClick={() => {
+              const at = nextTimeOfDay(time)
+              if (at) onSnooze(at)
+            }}
+          >
+            Set
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function HighPriorityNudge({ reminder: r, opened }: { reminder: Reminder; opened?: boolean }) {
@@ -158,13 +233,7 @@ function HighPriorityNudge({ reminder: r, opened }: { reminder: Reminder; opened
             >
               {canCompleteFromReminder(r) ? 'Mark done ✓' : 'Done ✓'}
             </button>
-            <button
-              type="button"
-              onClick={snooze}
-              className="min-h-11 rounded-2xl text-sm font-semibold opacity-75 hover:opacity-100"
-            >
-              Remind me in 10 min
-            </button>
+            <SnoozePicker onSnooze={snooze} light={style.theme === 'night'} />
           </div>
         </div>
       </div>
@@ -174,6 +243,7 @@ function HighPriorityNudge({ reminder: r, opened }: { reminder: Reminder; opened
 }
 
 function GentleNudge({ reminder: r }: { reminder: Reminder }) {
+  const [picking, setPicking] = useState(false)
   const style = nudgeStyle(r)
   const line = useMemo(() => smileLine(style.smile), [style.smile])
   const { done, snooze } = useActions(r)
@@ -221,11 +291,17 @@ function GentleNudge({ reminder: r }: { reminder: Reminder }) {
             <button
               type="button"
               className="min-h-9 rounded-lg bg-white/40 px-3 text-xs font-bold"
-              onClick={snooze}
+              onClick={() => setPicking(!picking)}
+              aria-expanded={picking}
             >
-              Snooze 10 min
+              Snooze…
             </button>
           </div>
+          {picking && (
+            <div className="mt-2">
+              <SnoozePicker onSnooze={snooze} light={style.theme === 'night'} compact />
+            </div>
+          )}
         </div>
         <button
           type="button"

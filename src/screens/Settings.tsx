@@ -47,6 +47,7 @@ import {
   IconPrivacy,
   IconSound,
   IconSuggest,
+  IconSync,
   IconWarning,
 } from '@/components/icons'
 import { useAppUpdate } from '@/lib/appUpdate'
@@ -56,6 +57,18 @@ import { DEFAULT_QUIET, QUIET_KEY, type QuietHours } from '@/lib/quietHours'
 import { formatShort } from '@/lib/suggest'
 
 /** One short page. Rarely-needed options sit inside "More" rows instead of extra tabs. */
+/** Reload DayNest (a Home Screen app has no reload button), picking up any new version first. */
+async function restartApp() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration()
+    await reg?.update()
+    reg?.waiting?.postMessage({ type: 'SKIP_WAITING' })
+  } catch {
+    /* offline: just reload */
+  }
+  setTimeout(() => window.location.reload(), 300)
+}
+
 type Panel = 'look' | 'night' | 'backup' | 'more' | 'family'
 
 /** Settings: a few rows; each opens a small sheet. */
@@ -199,6 +212,14 @@ export function Settings() {
             <Row onClick={() => navigate('/setup')}>
               <IconSuggest className="text-xl text-sage-ink" />
               <span className="flex-1">Suggestions again</span>
+              <ChevronRight size={18} className="text-muted" />
+            </Row>
+            <Row onClick={() => void restartApp()}>
+              <IconSync className="text-xl text-sage-ink" />
+              <span className="flex-1">
+                Restart app
+                <small className="block text-[11px] text-muted">Gets the latest version</small>
+              </span>
               <ChevronRight size={18} className="text-muted" />
             </Row>
           </Group>

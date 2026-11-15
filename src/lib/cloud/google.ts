@@ -136,10 +136,24 @@ let resumeAction: ResumeAction | null = null
 let redirectError: string | null = null
 
 /** iPhone/iPad (incl. the Home Screen app): Google's popup is blocked or can't report back. */
-export function redirectSignInNeeded(): boolean {
+export function isIOSDevice(): boolean {
   if (typeof navigator === 'undefined') return false
   const iPadOS = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || iPadOS
+}
+
+/**
+ * The Home Screen app on iPhone/iPad can't use Google's popup (it can't report back), so it
+ * goes to Google's page and returns. In a normal Safari or Chrome tab the popup works (and in
+ * Chrome, already signed in to Google, it's usually one tap); a blocked popup still falls back
+ * to the redirect.
+ */
+export function redirectSignInNeeded(): boolean {
+  if (!isIOSDevice()) return false
+  const standalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  return standalone
 }
 
 let leaving: Promise<never> | null = null

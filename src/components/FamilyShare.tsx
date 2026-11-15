@@ -17,7 +17,7 @@ import {
   getToken,
   peekResume,
   prepareGoogle,
-  redirectSignInNeeded,
+  isIOSDevice,
   takeRedirectError,
   takeResume,
   type Share,
@@ -354,7 +354,7 @@ export function JoinFlow({
             <Line icon={<IconPhone />} text="This phone becomes yours in the family" />
           </ul>
           {/* iPhone: Safari and the Home Screen app keep separate data */}
-          {redirectSignInNeeded() && !isStandalone() && (
+          {isIOSDevice() && !isStandalone() && (
             <div className="flex items-center gap-2 rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">
               <span className="flex-1">
                 Use DayNest from your Home Screen? Join there: copy, open it, paste.
