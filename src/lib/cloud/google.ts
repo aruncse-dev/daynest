@@ -183,7 +183,7 @@ async function callTokenFn(body: object) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-    // the site's no-referrer policy would otherwise send "Origin: null"
+    // always send our origin, so the function knows the request is from DayNest
     referrerPolicy: 'same-origin',
     cache: 'no-store',
   }).catch(() => {
@@ -678,6 +678,7 @@ interface PickerBuilder {
   setOAuthToken(t: string): PickerBuilder
   setDeveloperKey(k: string): PickerBuilder
   setAppId(id: string): PickerBuilder
+  setOrigin(o: string): PickerBuilder
   setTitle(t: string): PickerBuilder
   setCallback(cb: (d: { action: string; docs?: { id: string }[] }) => void): PickerBuilder
   build(): { setVisible(v: boolean): void }
@@ -733,6 +734,8 @@ export async function pickSharedFile(fileId: string): Promise<string | null> {
       .setOAuthToken(t)
       .setDeveloperKey(API_KEY)
       .setAppId(APP_ID)
+      // the API key is limited to this website: tell Google which one
+      .setOrigin(location.origin)
       .setTitle('Tap the DayNest family file')
       .setCallback((d) => {
         if (d.action === picker.Action.PICKED) resolve(d.docs?.[0]?.id ?? null)
