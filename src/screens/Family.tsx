@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ChevronRight, Pencil } from 'lucide-react'
@@ -14,6 +15,9 @@ import { useUI } from '@/store/ui'
 import { Avatar, Button, LinkButton, Panel, Ring } from '@/components/ui'
 import { EventRow } from '@/components/rows'
 import { PersonBar } from '@/components/PersonBar'
+import { FamilySharingSheet } from '@/components/FamilyShare'
+import { IconInvite } from '@/components/icons'
+import { familyConfigured } from '@/lib/cloud/google'
 
 /**
  * One person looks after the whole family on this phone. Everyone = an overview of all;
@@ -166,6 +170,7 @@ const DATE_KINDS: { type: CalendarEvent['type']; label: string; emoji: string }[
 ]
 
 function PersonPage({ profile }: { profile: Profile }) {
+  const [invite, setInvite] = useState(false)
   const today = useToday()
   const navigate = useNavigate()
   const openSheet = useUI((s) => s.openSheet)
@@ -261,6 +266,11 @@ function PersonPage({ profile }: { profile: Profile }) {
               {profile.isPrimary ? 'You' : roleLabel(profile)}
             </div>
           </div>
+          {familyConfigured() && !profile.isPrimary && (
+            <Button size="sm" onClick={() => setInvite(true)}>
+              <IconInvite className="text-[16px]" /> Invite
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -365,6 +375,7 @@ function PersonPage({ profile }: { profile: Profile }) {
           + Event
         </Button>
       </div>
+      {invite && <FamilySharingSheet person={profile} onClose={() => setInvite(false)} />}
     </>
   )
 }

@@ -9,6 +9,8 @@ export interface Profile {
   color: string // hex background
   role?: string // e.g. "Personal", "Learning & play"
   isPrimary?: boolean
+  /** their own Google email, once they're invited to the family (to show the invite again) */
+  email?: string
   createdAt: ISODate
   updatedAt: ISODate
   archivedAt?: ISODate | null

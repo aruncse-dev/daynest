@@ -23,6 +23,7 @@ import { useNow, useSetting } from '@/lib/hooks'
 import {
   getToken,
   googleConfigured,
+  hasToken,
   peekResume,
   prepareGoogle,
   takeRedirectError,
@@ -497,40 +498,50 @@ export function CloudFlow({
 export function CloudSyncButton() {
   const { on, error, last } = useCloud()
   const [busy, setBusy] = useState(false)
-  const now = useNow()
+  useNow(30_000) // re-check the sign-in every half minute
   if (!on) return null
-  const stale = !last || now.getTime() - new Date(last).getTime() > 60 * 60_000
+  // Google's sign-in lasts an hour; after that one tap reconnects (data is safe on the phone)
+  const needsTap = !hasToken()
+  const sync = async () => {
+    void getToken(true).catch(() => undefined) // from the tap, so Google's window may open
+    setBusy(true)
+    try {
+      const r = await syncCloud(true)
+      if (r) toast(r.pulled ? `Synced · ${r.pulled} new` : 'Synced', { emoji: '☁️' })
+    } catch (e) {
+      if (hasToken()) toast(errText(e), { emoji: '⚠️' })
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (busy)
+    return (
+      <span className="grid size-10 place-items-center text-sage-ink" aria-label="Syncing">
+        <IconSync className="animate-spin text-[20px]" />
+      </span>
+    )
+  if (needsTap || error)
+    return (
+      <button
+        type="button"
+        onClick={sync}
+        title={error ?? 'Tap to sync with Google'}
+        aria-label="Tap to sync with Google"
+        className="inline-flex h-9 items-center gap-1 rounded-full bg-amber-soft px-3 text-xs font-bold text-amber-ink"
+      >
+        {error ? <IconCloudOff className="text-[17px]" /> : <IconSync className="text-[17px]" />}
+        Sync
+      </button>
+    )
   return (
     <button
       type="button"
-      aria-label={
-        busy ? 'Syncing' : error || stale ? 'Tap to sync family copy' : 'Family copy synced'
-      }
-      title={error ?? (last ? `Synced ${ago(last)}` : 'Not synced yet')}
-      disabled={busy}
-      onClick={async () => {
-        void getToken(true).catch(() => undefined)
-        setBusy(true)
-        try {
-          await syncCloud(true)
-        } catch (e) {
-          toast(errText(e), { emoji: '⚠️' })
-        } finally {
-          setBusy(false)
-        }
-      }}
-      className={cx(
-        'grid size-10 place-items-center rounded-full transition',
-        error || stale ? 'bg-amber-soft text-amber-ink' : 'text-sage-ink hover:bg-surface2',
-      )}
+      onClick={sync}
+      title={last ? `Synced ${ago(last)}` : 'Synced'}
+      aria-label="Synced with Google. Tap to sync now"
+      className="grid size-10 place-items-center rounded-full text-sage-ink hover:bg-surface2"
     >
-      {busy ? (
-        <IconSync className="animate-spin text-[20px]" />
-      ) : error ? (
-        <IconCloudOff className="text-[20px]" />
-      ) : (
-        <IconCloudDone className="text-[20px]" />
-      )}
+      <IconCloudDone className="text-[20px]" />
     </button>
   )
 }
@@ -550,12 +561,14 @@ export function CloudRunner() {
     const onVisible = () => document.visibilityState === 'visible' && run()
     localChanges.addEventListener('change', soon)
     document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', run)
     const every = setInterval(run, 5 * 60_000)
     return () => {
       clearTimeout(timer)
       clearInterval(every)
       localChanges.removeEventListener('change', soon)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', run)
     }
   }, [on])
   return null

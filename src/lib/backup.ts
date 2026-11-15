@@ -53,6 +53,7 @@ export const LOCAL_ONLY_SETTINGS = new Set([
   'cloudPaused',
   'meProfileId',
   'ringFor',
+  'askWhoAmI',
   'backupFolderHandle',
   'pushEnabled',
   'pushDevice',

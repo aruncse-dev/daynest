@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import qrcode from 'qrcode-generator'
 import { setSetting } from '@/db/actions'
-import { useMembers, useSetting } from '@/lib/hooks'
-import { RING_KEY, type RingFor } from '@/lib/me'
+import { db } from '@/db/db'
+import type { Profile } from '@/db/types'
+import { nowIso } from '@/lib/date'
+import { useMembers, useProfiles, useSetting } from '@/lib/hooks'
+import { ASK_WHO_KEY, ME_KEY, RING_KEY, type RingFor } from '@/lib/me'
 import { familyShares, inviteToFamily, joinFamily, removeFromFamily } from '@/lib/cloud/cloud'
-import { getToken, peekResume, prepareGoogle, takeResume, type Share } from '@/lib/cloud/google'
-import { parseInvite, pendingInvite, type Invite } from '@/lib/cloud/invite'
+import {
+  getToken,
+  peekResume,
+  prepareGoogle,
+  redirectSignInNeeded,
+  takeResume,
+  type Share,
+} from '@/lib/cloud/google'
+import { isStandalone } from '@/lib/install'
+import { inviteLink, parseInvite, pendingInvite, type Invite } from '@/lib/cloud/invite'
 import { displayName } from '@/lib/people'
 import { toast } from '@/store/ui'
 import { useCloud } from './CloudCard'
@@ -83,14 +94,21 @@ export function InviteQR({ link }: { link: string }) {
  * Settings → Family sharing (owner): who has access, invite someone with their own Google
  * email (QR), and whose reminders ring on this phone.
  */
-export function FamilySharingSheet({ onClose }: { onClose: () => void }) {
+export function FamilySharingSheet({
+  onClose,
+  person,
+}: {
+  onClose: () => void
+  /** opened from someone's page: go straight to inviting them */
+  person?: Profile
+}) {
   const { on } = useCloud()
   const members = useMembers()
   const ring = useSetting<RingFor>(RING_KEY, 'all')
   const [shares, setShares] = useState<Share[] | null>(null)
-  const [inviting, setInviting] = useState(false)
-  const [who, setWho] = useState<string | null>(null)
-  const [email, setEmail] = useState('')
+  const [inviting, setInviting] = useState(!!person)
+  const [who, setWho] = useState<string | null>(person?.id ?? null)
+  const [email, setEmail] = useState(person?.email ?? '')
   const [link, setLink] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -109,6 +127,8 @@ export function FamilySharingSheet({ onClose }: { onClose: () => void }) {
     setErr(null)
     try {
       setLink(await inviteToFamily(who!, email))
+      // remember their email so the invite can be shown again without typing
+      await db.profiles.update(who!, { email: email.trim(), updatedAt: nowIso() })
     } catch (e) {
       setErr(errText(e))
     } finally {
@@ -117,7 +137,7 @@ export function FamilySharingSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Sheet title="Family sharing" onClose={onClose}>
+    <Sheet title={person ? `Invite ${person.name}` : 'Family sharing'} onClose={onClose}>
       {!on ? (
         <div className="grid gap-3">
           <ul className="grid gap-2">
@@ -141,28 +161,32 @@ export function FamilySharingSheet({ onClose }: { onClose: () => void }) {
         </div>
       ) : inviting ? (
         <div className="grid gap-3">
-          <Field group label="Who is joining?">
-            <div className="flex flex-wrap gap-1.5">
-              {members.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={who === p.id}
-                  onClick={() => setWho(p.id)}
-                  className={cx(
-                    'inline-flex min-h-10 items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold',
-                    who === p.id ? 'border-sage bg-sage-soft' : 'border-line bg-surface text-muted',
-                  )}
-                >
-                  <Avatar avatar={p.avatar} color={p.color} size={28} />
-                  {displayName(p)}
-                </button>
-              ))}
-            </div>
-            {!members.length && (
-              <span className="text-xs text-muted">Add them in the Family tab first</span>
-            )}
-          </Field>
+          {!person && (
+            <Field group label="Who is joining?">
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={who === p.id}
+                    onClick={() => setWho(p.id)}
+                    className={cx(
+                      'inline-flex min-h-10 items-center gap-1.5 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold',
+                      who === p.id
+                        ? 'border-sage bg-sage-soft'
+                        : 'border-line bg-surface text-muted',
+                    )}
+                  >
+                    <Avatar avatar={p.avatar} color={p.color} size={28} />
+                    {displayName(p)}
+                  </button>
+                ))}
+              </div>
+              {!members.length && (
+                <span className="text-xs text-muted">Add them in the Family tab first</span>
+              )}
+            </Field>
+          )}
           <Field label="Their Google email">
             <Input
               type="email"
@@ -218,17 +242,19 @@ export function FamilySharingSheet({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      <Field group label="Reminders on this phone">
-        <Segmented
-          label="Reminders on this phone"
-          value={ring}
-          onChange={(v) => setSetting(RING_KEY, v)}
-          options={[
-            { value: 'all', label: 'Everyone’s' },
-            { value: 'mine', label: 'Mine + shared' },
-          ]}
-        />
-      </Field>
+      {!person && (
+        <Field group label="Reminders on this phone">
+          <Segmented
+            label="Reminders on this phone"
+            value={ring}
+            onChange={(v) => setSetting(RING_KEY, v)}
+            options={[
+              { value: 'all', label: 'Everyone’s' },
+              { value: 'mine', label: 'Mine + shared' },
+            ]}
+          />
+        </Field>
+      )}
       {err && (
         <p className="flex items-center gap-1.5 rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">
           <IconWarning className="text-base" /> {err}
@@ -311,6 +337,28 @@ export function JoinFlow({
             <Line icon={<IconFile />} text="Tap the DayNest family file once" />
             <Line icon={<IconPhone />} text="This phone becomes yours in the family" />
           </ul>
+          {/* iPhone: Safari and the Home Screen app keep separate data */}
+          {redirectSignInNeeded() && !isStandalone() && (
+            <div className="flex items-center gap-2 rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">
+              <span className="flex-1">
+                Use DayNest from your Home Screen? Join there: copy, open it, paste.
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(inviteLink(invite))
+                    toast('Invite link copied', { emoji: '📋' })
+                  } catch {
+                    toast('Copy the link from the message you got')
+                  }
+                }}
+              >
+                <IconCopy className="text-[16px]" /> Copy
+              </Button>
+            </div>
+          )}
           {hasData && (
             <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
               <span>
@@ -352,4 +400,34 @@ export function InviteHost() {
   const [open, setOpen] = useState(() => !!pendingInvite() || peekResume() === 'join')
   if (!open) return null
   return <JoinFlow hasData onClose={() => setOpen(false)} />
+}
+
+/** Once, after restoring a family copy here: "Who are you?" — tap your own picture. */
+export function WhoAreYou() {
+  const ask = useSetting(ASK_WHO_KEY, false)
+  const profiles = useProfiles()
+  if (!ask || !profiles || profiles.length < 2) return null
+  const choose = async (id: string) => {
+    await setSetting(ME_KEY, id)
+    await setSetting(ASK_WHO_KEY, false)
+    toast('Done: this phone is yours', { emoji: '👋' })
+  }
+  return (
+    <Sheet title="Who are you?" onClose={() => void setSetting(ASK_WHO_KEY, false)}>
+      <p className="text-sm text-muted">Tap your picture: this phone becomes yours.</p>
+      <div className="grid grid-cols-3 gap-2">
+        {profiles.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => void choose(p.id)}
+            className="grid justify-items-center gap-1.5 rounded-2xl border border-line bg-surface p-3 text-sm font-semibold transition active:scale-95"
+          >
+            <Avatar avatar={p.avatar} color={p.color} size={48} />
+            <span className="max-w-full truncate">{p.name}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  )
 }

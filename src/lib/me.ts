@@ -8,6 +8,8 @@ import type { Reminder } from '@/db/types'
 export const ME_KEY = 'meProfileId'
 export const RING_KEY = 'ringFor'
 export type RingFor = 'all' | 'mine'
+/** After restoring a family copy on a phone: ask once which person this phone belongs to. */
+export const ASK_WHO_KEY = 'askWhoAmI'
 
 /** Which reminders this phone should ring: everyone's (the family manager) or mine + shared. */
 export async function ringsHere(): Promise<(r: Reminder) => boolean> {

@@ -46,7 +46,32 @@ declare global {
   }
 }
 
-let token: { value: string; expiresAt: number } | null = null
+type Token = { value: string; expiresAt: number }
+const TOKEN_KEY = 'daynest.gtoken'
+
+/**
+ * Google's access token lasts about an hour (no server = no longer-lived sign-in). It's kept
+ * on this phone for that hour so reopening the app doesn't disconnect; it only allows
+ * DayNest's own files (`drive.file`) and is dropped when it expires or on sign-out.
+ */
+let token: Token | null = (() => {
+  try {
+    const t = JSON.parse(localStorage.getItem(TOKEN_KEY) ?? 'null') as Token | null
+    return t && t.expiresAt > Date.now() + 60_000 ? t : null
+  } catch {
+    return null
+  }
+})()
+
+function setToken(t: Token | null) {
+  token = t
+  try {
+    if (t) localStorage.setItem(TOKEN_KEY, JSON.stringify(t))
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* private mode: memory only */
+  }
+}
 let gisLoading: Promise<void> | null = null
 
 function loadGis(): Promise<void> {
@@ -129,7 +154,7 @@ export function consumeRedirect(): ResumeAction | null {
   if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) return null
   const access = p.get('access_token')
   if (access) {
-    token = { value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 }
+    setToken({ value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 })
     resumeAction = saved.next
     return saved.next
   }
@@ -182,7 +207,7 @@ export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Pro
           reject(new Error(r.error_description || r.error || 'Google sign-in was cancelled.'))
           return
         }
-        token = { value: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 }
+        setToken({ value: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
         resolve(r.access_token)
       },
       error_callback: (e) => {
@@ -205,7 +230,7 @@ export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Pro
 
 export function signOutGoogle() {
   if (token) window.google?.accounts.oauth2.revoke(token.value)
-  token = null
+  setToken(null)
 }
 
 async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -214,7 +239,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json', ...init.headers },
   })
-  if (res.status === 401) token = null
+  if (res.status === 401) setToken(null)
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
     throw new Error(body?.error?.message ?? `Google returned ${res.status}`)

@@ -30,7 +30,7 @@ import {
 } from './google'
 import { syncOnce } from './sync'
 import { clearInvite, inviteLink, type Invite } from './invite'
-import { ME_KEY, RING_KEY } from '@/lib/me'
+import { ASK_WHO_KEY, ME_KEY, RING_KEY } from '@/lib/me'
 
 export const CLOUD_SHEET = 'cloudSheetId'
 export const CLOUD_CODE = 'cloudKeyCode'
@@ -143,6 +143,9 @@ export async function unlockCloud(
   }
   await saveState(sheet, code)
   const r = await syncWith(sheet, code)
+  // a family copy with several people: this phone asks once who it belongs to
+  if ((await db.profiles.filter((p) => !p.archivedAt).count()) > 1)
+    await setSetting(ASK_WHO_KEY, true)
   if (enterApp) await setSetting(SETTING_ONBOARDED, true)
   return r
 }
@@ -160,7 +163,9 @@ export async function syncCloud(interactive = false) {
       await getToken(interactive)
       return await syncWith(sheet, code)
     } catch (e) {
-      await setSetting(CLOUD_ERROR, e instanceof Error ? e.message : String(e))
+      // Google just needs a tap (sign-in expired / closed): not a problem worth flagging
+      if (!hasToken()) await setSetting(CLOUD_ERROR, null)
+      else await setSetting(CLOUD_ERROR, e instanceof Error ? e.message : String(e))
       throw e
     } finally {
       running = null
@@ -238,7 +243,11 @@ export async function joinFamily(inv: Invite, replace: boolean) {
   if (!picked) throw new Error('Tap the DayNest family file to join')
   if (picked !== inv.f) throw new Error('That’s a different file: pick the DayNest family one')
   const r = await unlockCloud(inv.f, inv.k, replace, false)
-  if (inv.p && (await db.profiles.get(inv.p))) await setSetting(ME_KEY, inv.p)
+  // the invite says who this phone is for: no need to ask
+  if (inv.p && (await db.profiles.get(inv.p))) {
+    await setSetting(ME_KEY, inv.p)
+    await setSetting(ASK_WHO_KEY, false)
+  }
   await setSetting(RING_KEY, 'mine')
   clearInvite()
   // last: opening the app now finds no pending invite
