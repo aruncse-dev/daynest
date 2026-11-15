@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { db, SCHEMA_VERSION } from '@/db/db'
-import { clearAllData, setSetting } from '@/db/actions'
+import { setSetting } from '@/db/actions'
+import { startOver } from '@/lib/reset'
 import { SETTING_ONBOARDED } from '@/db/keys'
 import { exportToDownload, importBackup, validateBackup, type ValidationResult } from '@/lib/backup'
 import {
@@ -136,7 +137,7 @@ export function Settings() {
         <NavRow
           icon={<IconMore />}
           title="More"
-          sub="Tour · Privacy · Erase"
+          sub="Tour · Privacy · Start over"
           onClick={() => setPanel('more')}
         />
       </Group>
@@ -239,14 +240,13 @@ export function Settings() {
             </span>
             <ConfirmButton
               className="!min-h-9 !px-3 !text-xs"
-              confirmText="Erase everything?"
+              confirmText="Erase this phone?"
               onConfirm={async () => {
-                await clearAllData()
-                await setSetting(SETTING_ONBOARDED, false)
-                toast('All data erased')
+                await startOver()
+                toast('Erased. Starting over')
               }}
             >
-              Erase all data
+              Start over
             </ConfirmButton>
           </div>
         </Sheet>

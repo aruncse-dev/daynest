@@ -20,6 +20,7 @@ import {
   getToken,
   GoogleSheetStore,
   hasToken,
+  familyConfigured,
   renameFile,
   listShares,
   pickSharedFile,
@@ -153,7 +154,8 @@ export async function unlockCloud(
   await saveState(sheet, code)
   const r = await syncWith(sheet, code)
   // a family copy with several people: this phone asks once who it belongs to
-  if ((await db.profiles.filter((p) => !p.archivedAt).count()) > 1)
+  // (only when family members can have their own phones; otherwise it's always you)
+  if (familyConfigured() && (await db.profiles.filter((p) => !p.archivedAt).count()) > 1)
     await setSetting(ASK_WHO_KEY, true)
   if (enterApp) await setSetting(SETTING_ONBOARDED, true)
   return r

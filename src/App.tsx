@@ -77,8 +77,12 @@ export default function App() {
           <ReminderRunner />
           <PushSync />
           <CloudRunner />
-          {familyConfigured() && <InviteHost />}
-          <WhoAreYou />
+          {familyConfigured() && (
+            <>
+              <InviteHost />
+              <WhoAreYou />
+            </>
+          )}
           <Suspense
             fallback={
               <div className="mx-auto max-w-[480px] p-4">
