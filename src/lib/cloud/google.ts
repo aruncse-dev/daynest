@@ -18,10 +18,10 @@ const APP_ID = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined
 export const googleConfigured = () => !!CLIENT_ID
 /**
  * Family members on their own phones with their own Google accounts (invite → QR → join).
- * Built and tested, but switched off for now to keep things minimal: set
- * VITE_FAMILY_SHARING=on (plus the Picker's API key and project number) to bring it back.
+ * On by default; set VITE_FAMILY_SHARING=off to hide it. Needs the Picker's API key and
+ * project number.
  */
-const FAMILY_SHARING = import.meta.env.VITE_FAMILY_SHARING === 'on'
+const FAMILY_SHARING = import.meta.env.VITE_FAMILY_SHARING !== 'off'
 export const familyConfigured = () => FAMILY_SHARING && !!CLIENT_ID && !!API_KEY && !!APP_ID
 
 interface TokenResponse {

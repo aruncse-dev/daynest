@@ -93,7 +93,7 @@ One-time setup for the app owner (free, no card):
 
 ### Family sharing (optional): everyone with their own Google account
 
-> **Switched off for now** (one Google account per family keeps things simple). To turn it on later, also set `VITE_FAMILY_SHARING=on` in Vercel and redeploy.
+> On by default. To hide it, set `VITE_FAMILY_SHARING=off` in Vercel and redeploy.
 
 Settings → **Family sharing** → **Invite someone**: pick the person, type **their own** Google email → DayNest shares the family file with them and shows a **QR / link**. They scan it with the phone camera (or paste the link under **Join a family** on the welcome screen), sign in with their own Google account, tap the family file once in Google's chooser, and their phone becomes theirs ("Me") with the same family data. Each phone chooses whose reminders ring there.
 
