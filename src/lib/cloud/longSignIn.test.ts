@@ -17,7 +17,7 @@ describe('long Google sign-in function', () => {
     const r = await handle(new Request('https://x/api/google-token'), env)
     expect(await r.json()).toEqual({ enabled: true })
     const off = await handle(new Request('https://x/api/google-token'), { clientId: 'cid' })
-    expect(await off.json()).toEqual({ enabled: false })
+    expect(await off.json()).toEqual({ enabled: false, missing: ['GOOGLE_CLIENT_SECRET'] })
   })
 
   it('swaps a one-time code for tokens, sending the secret only to Google', async () => {

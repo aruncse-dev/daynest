@@ -34,7 +34,12 @@ export async function handle(req: Request, env: Env, f: typeof fetch = fetch): P
   if (origin && !allowed.includes(origin)) return json({ error: 'origin not allowed' }, 403)
 
   const enabled = !!env.clientId && !!env.secret
-  if (req.method === 'GET') return json({ enabled })
+  // names only, never values: shows which Vercel setting is missing
+  const missing = [
+    !env.clientId && 'VITE_GOOGLE_CLIENT_ID',
+    !env.secret && 'GOOGLE_CLIENT_SECRET',
+  ].filter(Boolean)
+  if (req.method === 'GET') return json(enabled ? { enabled } : { enabled, missing })
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
   if (!enabled) return json({ error: 'long sign-in not set up' }, 501)
 
