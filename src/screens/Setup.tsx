@@ -1,6 +1,6 @@
 import { CloudFlow } from '@/components/CloudCard'
-import { googleConfigured } from '@/lib/cloud/google'
-import { useState, type ReactNode } from 'react'
+import { googleConfigured, peekResume, prepareGoogle } from '@/lib/cloud/google'
+import { useEffect, useState, type ReactNode } from 'react'
 import { IconCloud, IconPhone, IconPlay } from '@/components/icons'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
@@ -358,7 +358,9 @@ function StepShell({
 }
 
 function Welcome({ onStart, onTour }: { onStart: () => void; onTour: () => void }) {
-  const [google, setGoogle] = useState(false)
+  // back from Google's page: reopen Google mode to finish
+  const [google, setGoogle] = useState(() => peekResume() === 'turnOn')
+  useEffect(() => prepareGoogle(), [])
   return (
     <div className="grid h-full place-items-center text-center">
       <div className="w-full">

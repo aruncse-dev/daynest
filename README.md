@@ -88,7 +88,7 @@ One-time setup for the app owner (free, no card):
 1. [Google Cloud console](https://console.cloud.google.com/) → new project "DayNest".
 2. **APIs & Services → Library**: enable **Google Sheets API** and **Google Drive API**.
 3. **Google Auth Platform** (OAuth consent screen): External, app name DayNest, your email. Under **Data access** add the scope `.../auth/drive.file`. Under **Audience** choose **Publish app** (only a non-sensitive scope, so no review is needed).
-4. **Clients → Create client → Web application**. Authorized JavaScript origin: `https://daynestapp.vercel.app`. Copy the **Client ID**.
+4. **Clients → Create client → Web application**. Authorized JavaScript origin: `https://daynestapp.vercel.app`. Authorized redirect URI: `https://daynestapp.vercel.app/` (iPhone/iPad sign in by redirect, not a popup). Copy the **Client ID**.
 5. Vercel → Settings → Environment Variables: `VITE_GOOGLE_CLIENT_ID` = that Client ID (public by design), then redeploy.
 
 ## Your data

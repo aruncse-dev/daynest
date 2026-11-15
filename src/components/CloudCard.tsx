@@ -20,7 +20,14 @@ import {
 } from './icons'
 import { localChanges } from '@/db/db'
 import { useNow, useSetting } from '@/lib/hooks'
-import { googleConfigured } from '@/lib/cloud/google'
+import {
+  getToken,
+  googleConfigured,
+  peekResume,
+  prepareGoogle,
+  takeRedirectError,
+  takeResume,
+} from '@/lib/cloud/google'
 import {
   CLOUD_CODE,
   CLOUD_ERROR,
@@ -131,7 +138,8 @@ export function ModeSwitch({ value, onChange }: { value: Mode; onChange: (m: Mod
 export function CloudCard() {
   const { on, linked, last, error } = useCloud()
   const code = useSetting<string | null>(CLOUD_CODE, null)
-  const [flow, setFlow] = useState(false)
+  // back from Google's page mid-way through turning on: reopen the flow to finish
+  const [flow, setFlow] = useState(() => peekResume() === 'turnOn')
   const [busy, setBusy] = useState(false)
   const [show, setShow] = useState(false)
   if (!googleConfigured()) return null
@@ -152,8 +160,10 @@ export function CloudCard() {
     if (!v) {
       void pauseCloud()
       toast('Only on this phone now', { emoji: '📱' })
-    } else if (linked) void run(resumeCloud, 'Back on · synced')
-    else setFlow(true)
+    } else if (linked) {
+      void getToken(true).catch(() => undefined) // from the tap, so Google's window may open
+      void run(resumeCloud, 'Back on · synced')
+    } else setFlow(true)
   }
 
   return (
@@ -198,7 +208,10 @@ export function CloudCard() {
             type="button"
             aria-label="Sync now"
             disabled={busy}
-            onClick={() => void run(() => syncCloud(true))}
+            onClick={() => {
+              void getToken(true).catch(() => undefined)
+              void run(() => syncCloud(true))
+            }}
             className="grid size-9 place-items-center rounded-lg text-sage-ink hover:bg-surface2"
           >
             <IconSync className={cx('text-[19px]', busy && 'animate-spin')} />
@@ -296,6 +309,8 @@ export function CloudFlow({
   const [confirmFresh, setConfirmFresh] = useState(false)
 
   const start = async () => {
+    // first thing in the tap: lets Google's popup open (or goes to Google's page on iPhone)
+    void getToken(true, 'turnOn').catch(() => undefined)
     setBusy(true)
     setErr(null)
     try {
@@ -320,6 +335,15 @@ export function CloudFlow({
       setBusy(false)
     }
   }
+
+  useEffect(() => {
+    prepareGoogle()
+    const e = takeRedirectError()
+    if (e) setErr(e)
+    // back from Google's page: carry on without another tap
+    if (takeResume() === 'turnOn') void start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on open
+  }, [])
 
   const fresh = async () => {
     setBusy(true)
@@ -485,6 +509,7 @@ export function CloudSyncButton() {
       title={error ?? (last ? `Synced ${ago(last)}` : 'Not synced yet')}
       disabled={busy}
       onClick={async () => {
+        void getToken(true).catch(() => undefined)
         setBusy(true)
         try {
           await syncCloud(true)

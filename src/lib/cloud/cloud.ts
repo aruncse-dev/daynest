@@ -72,7 +72,7 @@ export type TurnOnResult = { kind: 'created'; code: string } | { kind: 'found'; 
 /** From a tap: sign in, then create the family Sheet, or find the one this account already has. */
 export async function turnOnCloud(): Promise<TurnOnResult | { kind: 'resumed' }> {
   if (await resumeCloud()) return { kind: 'resumed' }
-  await getToken(true)
+  await getToken(true, 'turnOn')
   const existing = await findFamilySheet()
   if (existing) return { kind: 'found', sheet: existing }
   return createNew()
@@ -83,7 +83,7 @@ export async function turnOnCloud(): Promise<TurnOnResult | { kind: 'resumed' }>
  * deleted) and a new one is created with a new key code from this phone's data.
  */
 export async function startFresh(oldSheet: string) {
-  await getToken(true)
+  await getToken(true, 'turnOn')
   const day = new Date().toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
   await renameFile(oldSheet, `DayNest family (old, ${day})`)
   return createNew()

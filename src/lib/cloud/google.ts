@@ -61,15 +61,113 @@ function loadGis(): Promise<void> {
 
 export const hasToken = () => !!token && token.expiresAt > Date.now() + 60_000
 
+/* ---------- Redirect sign-in (iPhone/iPad, or when a popup is blocked) ---------- */
+
+/** What to carry on with after Google sends the person back. */
+export type ResumeAction = 'turnOn' | 'sync'
+const REDIRECT_KEY = 'daynest.oauth'
+let resumeAction: ResumeAction | null = null
+let redirectError: string | null = null
+
+/** iPhone/iPad (incl. the Home Screen app): Google's popup is blocked or can't report back. */
+export function redirectSignInNeeded(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const iPadOS = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) || iPadOS
+}
+
+let leaving: Promise<never> | null = null
+
+function redirectSignIn(next: ResumeAction): Promise<never> {
+  // already on the way to Google: don't start a second trip
+  if (leaving) return leaving
+  const state = crypto.randomUUID()
+  try {
+    localStorage.setItem(
+      REDIRECT_KEY,
+      JSON.stringify({ state, next, path: location.pathname + location.search, at: Date.now() }),
+    )
+  } catch {
+    /* private mode: the token still arrives, we just can't resume automatically */
+  }
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  u.search = new URLSearchParams({
+    client_id: CLIENT_ID!,
+    redirect_uri: `${location.origin}/`,
+    response_type: 'token',
+    scope: SCOPE,
+    include_granted_scopes: 'true',
+    state,
+  }).toString()
+  location.assign(u.toString())
+  leaving = new Promise<never>(() => undefined) // the page is leaving
+  return leaving
+}
+
 /**
- * Get an access token. `interactive` must come from a tap (it may open Google's window);
- * otherwise it tries quietly and fails if Google needs the user.
+ * Call once at start-up: picks up the token Google put in the address (#access_token=…),
+ * removes it from the address bar, and remembers what to carry on with.
  */
-export async function getToken(interactive: boolean): Promise<string> {
-  if (hasToken()) return token!.value
-  if (!CLIENT_ID) throw new Error('Google sign-in is not set up for this app.')
-  await loadGis()
-  return new Promise((resolve, reject) => {
+export function consumeRedirect(): ResumeAction | null {
+  const hash = location.hash.slice(1)
+  if (!/(^|&)(access_token|error)=/.test(hash)) return null
+  const p = new URLSearchParams(hash)
+  let saved: { state: string; next: ResumeAction; path: string; at: number } | null = null
+  try {
+    saved = JSON.parse(localStorage.getItem(REDIRECT_KEY) ?? 'null')
+    localStorage.removeItem(REDIRECT_KEY)
+  } catch {
+    /* ignore */
+  }
+  history.replaceState(null, '', saved?.path ?? location.pathname + location.search)
+  if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) return null
+  const access = p.get('access_token')
+  if (access) {
+    token = { value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 }
+    resumeAction = saved.next
+    return saved.next
+  }
+  redirectError =
+    p.get('error') === 'access_denied' ? 'Google sign-in was cancelled.' : p.get('error')
+  return null
+}
+
+/** The action to resume after a redirect, without using it up. */
+export const peekResume = () => resumeAction
+/** Take (and clear) the action to resume after a redirect. */
+export function takeResume() {
+  const a = resumeAction
+  resumeAction = null
+  return a
+}
+export function takeRedirectError() {
+  const e = redirectError
+  redirectError = null
+  return e
+}
+
+/* ---------- Popup sign-in (Android, desktop) ---------- */
+
+let pending: Promise<string> | null = null
+
+/** Load Google's script ahead of time so a tap can open the popup straight away. */
+export function prepareGoogle() {
+  if (CLIENT_ID && !redirectSignInNeeded()) void loadGis().catch(() => undefined)
+}
+
+/**
+ * Get an access token. `interactive` must come from a tap: call it first thing in the tap
+ * handler (before any await), so browsers allow Google's popup. On iPhone/iPad it goes to
+ * Google's page and comes back (`next` says what to carry on with).
+ */
+export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Promise<string> {
+  if (hasToken()) return Promise.resolve(token!.value)
+  if (!CLIENT_ID) return Promise.reject(new Error('Google sign-in is not set up'))
+  if (redirectSignInNeeded())
+    return interactive ? redirectSignIn(next) : Promise.reject(new Error('Tap to sync'))
+  if (pending) return pending
+  if (!window.google?.accounts?.oauth2) return loadGis().then(() => getToken(interactive, next))
+  pending = new Promise<string>((resolve, reject) => {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
@@ -81,13 +179,22 @@ export async function getToken(interactive: boolean): Promise<string> {
         token = { value: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 }
         resolve(r.access_token)
       },
-      error_callback: (e) =>
+      error_callback: (e) => {
+        // blocked popup: go to Google's page instead
+        if (interactive && e.type === 'popup_failed_to_open') {
+          void redirectSignIn(next)
+          return
+        }
         reject(
           new Error(e.type === 'popup_closed' ? 'Google sign-in was closed.' : e.message || e.type),
-        ),
+        )
+      },
     })
     client.requestAccessToken({ prompt: interactive ? '' : 'none' })
+  }).finally(() => {
+    pending = null
   })
+  return pending
 }
 
 export function signOutGoogle() {
