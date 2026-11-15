@@ -6,7 +6,13 @@ import type { Profile } from '@/db/types'
 import { nowIso } from '@/lib/date'
 import { useMembers, useProfiles, useSetting } from '@/lib/hooks'
 import { ASK_WHO_KEY, ME_KEY, RING_KEY, type RingFor } from '@/lib/me'
-import { familyShares, inviteToFamily, joinFamily, removeFromFamily } from '@/lib/cloud/cloud'
+import {
+  CLOUD_SHEET,
+  familyShares,
+  inviteToFamily,
+  joinFamily,
+  removeFromFamily,
+} from '@/lib/cloud/cloud'
 import {
   getToken,
   peekResume,
@@ -280,6 +286,9 @@ export function JoinFlow({
   const [invite, setInvite] = useState<Invite | null>(() => pendingInvite())
   const [text, setText] = useState('')
   const [replace, setReplace] = useState(true)
+  // one family per phone for now: joining a different family replaces it, never mixes the two
+  const linked = useSetting<string | null>(CLOUD_SHEET, null)
+  const otherFamily = !!linked && !!invite && linked !== invite.f
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -289,7 +298,7 @@ export function JoinFlow({
     setBusy(true)
     setErr(null)
     try {
-      const r = await joinFamily(inv, replace)
+      const r = await joinFamily(inv, replace || (!!linked && linked !== inv.f))
       toast(`Joined · ${r.pulled} item${r.pulled === 1 ? '' : 's'}`, { emoji: '👪' })
       onClose()
     } catch (e) {
@@ -359,7 +368,13 @@ export function JoinFlow({
               </Button>
             </div>
           )}
-          {hasData && (
+          {otherFamily && (
+            <p className="flex items-center gap-1.5 rounded-xl bg-amber-soft p-3 text-xs text-amber-ink">
+              <IconWarning className="shrink-0 text-base" /> This phone is already in a family.
+              Joining replaces it here (the other family keeps its copy).
+            </p>
+          )}
+          {hasData && !otherFamily && (
             <label className="flex items-center justify-between gap-3 rounded-xl bg-surface2 p-3 text-sm">
               <span>
                 Replace this phone’s data
