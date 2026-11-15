@@ -143,17 +143,13 @@ export function isIOSDevice(): boolean {
 }
 
 /**
- * The Home Screen app on iPhone/iPad can't use Google's popup (it can't report back), so it
- * goes to Google's page and returns. In a normal Safari or Chrome tab the popup works (and in
- * Chrome, already signed in to Google, it's usually one tap); a blocked popup still falls back
- * to the redirect.
+ * iPhone/iPad always go to Google's page and come back: Google's popup isn't reliable there
+ * (blocked, or it can't report back from the Home Screen app). In a Safari/Chrome tab the
+ * browser is usually already signed in to Google, so it's one tap; the remembered account
+ * (login_hint) keeps the Home Screen app quick too. Android/desktop use the popup.
  */
 export function redirectSignInNeeded(): boolean {
-  if (!isIOSDevice()) return false
-  const standalone =
-    window.matchMedia?.('(display-mode: standalone)').matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  return standalone
+  return isIOSDevice()
 }
 
 let leaving: Promise<never> | null = null
