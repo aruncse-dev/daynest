@@ -514,13 +514,13 @@ export function CloudFlow({
   )
 }
 
-/** Header: shows the family copy's state; tap to sync (Google may ask once an hour). */
+/** Header: shows the family copy's state; tap to sync. */
 export function CloudSyncButton() {
   const { on, error, last } = useCloud()
   const [busy, setBusy] = useState(false)
   useNow(30_000) // re-check the sign-in every half minute
   if (!on) return null
-  // Google's sign-in lasts an hour; after that one tap reconnects (data is safe on the phone)
+  // signed in (long sign-in renews quietly); without it, Google's hour runs out and one tap reconnects
   const needsTap = !hasToken()
   const sync = async () => {
     void getToken(true).catch(() => undefined) // from the tap, so Google's window may open

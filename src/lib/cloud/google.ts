@@ -2,7 +2,12 @@
  * Google sign-in and Sheets access, straight from the phone: no DayNest server.
  *
  * Scope `drive.file`: DayNest can only see files it created (or that someone picks for it),
- * never the rest of the user's Drive. Access tokens live in memory for about an hour.
+ * never the rest of the user's Drive. Google's access tokens last about an hour.
+ *
+ * Long sign-in (when DayNest's tiny token function is set up, see api/google-token.ts): the
+ * first sign-in goes to Google's page once and comes back with a one-time code; the function
+ * swaps it for a long-lived sign-in (refresh token) kept on this phone, and renews the hour
+ * token quietly from then on. No more signing in every hour. Without it: the hour token.
  */
 import type { CloudMeta, CloudRow, CloudStore } from './store'
 
@@ -125,7 +130,145 @@ function loadGis(): Promise<void> {
   return gisLoading
 }
 
-export const hasToken = () => !!token && token.expiresAt > Date.now() + 60_000
+const tokenValid = () => !!token && token.expiresAt > Date.now() + 60_000
+
+/* ---------- Long sign-in (refresh token via /api/google-token) ---------- */
+
+const REFRESH_KEY = 'daynest.grefresh'
+const LONG_KEY = 'daynest.glong'
+const TOKEN_FN = '/api/google-token'
+const read = (k: string) => {
+  try {
+    return localStorage.getItem(k)
+  } catch {
+    return null
+  }
+}
+const write = (k: string, v: string | null) => {
+  try {
+    if (v == null) localStorage.removeItem(k)
+    else localStorage.setItem(k, v)
+  } catch {
+    /* private mode */
+  }
+}
+/**
+ * The long-lived sign-in. It stays on this phone only, allows just DayNest's own files
+ * (drive.file), and is revoked on sign-out / Start over. It's useless without DayNest's
+ * client secret, which only the token function has.
+ */
+const refreshToken = () => read(REFRESH_KEY)
+
+/** Signed in on this phone: a fresh token, or a long sign-in that renews it quietly. */
+export const hasToken = () => tokenValid() || !!refreshToken()
+
+let longCheck: Promise<boolean> | null = null
+/** Is the token function set up on this site? (asked once per start, remembered) */
+function checkLongSignIn(): Promise<boolean> {
+  longCheck ??= fetch(TOKEN_FN, { cache: 'no-store' })
+    .then(async (r) => {
+      const ok =
+        r.ok &&
+        (r.headers.get('content-type') ?? '').includes('json') &&
+        ((await r.json()) as { enabled?: boolean }).enabled === true
+      write(LONG_KEY, ok ? '1' : '0')
+      return ok
+    })
+    .catch(() => read(LONG_KEY) === '1') // offline: go with what we knew
+  return longCheck
+}
+
+async function callTokenFn(body: object) {
+  const r = await fetch(TOKEN_FN, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    // the site's no-referrer policy would otherwise send "Origin: null"
+    referrerPolicy: 'same-origin',
+    cache: 'no-store',
+  }).catch(() => {
+    throw new Error('Could not reach Google. Check your connection.')
+  })
+  const j = (await r.json().catch(() => ({}))) as {
+    accessToken?: string
+    expiresIn?: number
+    refreshToken?: string
+    error?: string
+  }
+  return { status: r.status, ...j }
+}
+
+function keep(accessToken: string, expiresIn = 3600) {
+  setToken({ value: accessToken, expiresAt: Date.now() + expiresIn * 1000 })
+}
+
+let refreshing: Promise<string> | null = null
+/** Renew the hour token with the long sign-in (no window, no tap). */
+function refreshAccess(interactive: boolean, next: ResumeAction): Promise<string> {
+  refreshing ??= (async () => {
+    const r = await callTokenFn({ refreshToken: refreshToken() })
+    if (r.accessToken) {
+      keep(r.accessToken, r.expiresIn)
+      return r.accessToken
+    }
+    // revoked in the Google account, or the function was switched off: sign in again once
+    if (r.status === 400 || r.status === 501) {
+      write(REFRESH_KEY, null)
+      if (interactive) return getToken(true, next)
+      throw new Error('Tap to sync')
+    }
+    throw new Error('Google is busy. Try again in a moment.')
+  })().finally(() => {
+    refreshing = null
+  })
+  return refreshing
+}
+
+const b64url = (b: Uint8Array) =>
+  btoa(String.fromCharCode(...b))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+
+/** Go to Google's page once for a one-time code (PKCE), asking for the long sign-in. */
+async function codeSignIn(next: ResumeAction): Promise<never> {
+  if (leaving) return leaving
+  leaving = new Promise<never>(() => undefined) // the page is leaving
+  const state = crypto.randomUUID()
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)))
+  const challenge = b64url(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))),
+  )
+  write(
+    REDIRECT_KEY,
+    JSON.stringify({
+      state,
+      next,
+      path: location.pathname + location.search,
+      at: Date.now(),
+      verifier,
+    }),
+  )
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  u.search = new URLSearchParams({
+    client_id: CLIENT_ID!,
+    redirect_uri: `${location.origin}/`,
+    response_type: 'code',
+    scope: SCOPE,
+    include_granted_scopes: 'true',
+    access_type: 'offline', // = a long-lived sign-in
+    prompt: 'consent', // Google only hands out the long sign-in with consent
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    state,
+    ...(accountHint() ? { login_hint: accountHint()! } : {}),
+  }).toString()
+  location.assign(u.toString())
+  return leaving
+}
+
+/** The one-time code from Google being swapped for the long sign-in (right after coming back). */
+let exchanging: Promise<string> | null = null
 
 /* ---------- Redirect sign-in (iPhone/iPad, or when a popup is blocked) ---------- */
 
@@ -186,23 +329,58 @@ function redirectSignIn(next: ResumeAction): Promise<never> {
  * removes it from the address bar, and remembers what to carry on with.
  */
 export function consumeRedirect(): ResumeAction | null {
+  const q = new URLSearchParams(location.search)
+  const codeReturn = q.has('state') && (q.has('code') || q.has('error'))
   const hash = location.hash.slice(1)
-  if (!/(^|&)(access_token|error)=/.test(hash)) return null
-  const p = new URLSearchParams(hash)
-  let saved: { state: string; next: ResumeAction; path: string; at: number } | null = null
+  if (!codeReturn && !/(^|&)(access_token|error)=/.test(hash)) return null
+  const p = codeReturn ? q : new URLSearchParams(hash)
+  let saved: {
+    state: string
+    next: ResumeAction
+    path: string
+    at: number
+    verifier?: string
+  } | null = null
   try {
     saved = JSON.parse(localStorage.getItem(REDIRECT_KEY) ?? 'null')
     localStorage.removeItem(REDIRECT_KEY)
   } catch {
     /* ignore */
   }
-  history.replaceState(null, '', saved?.path ?? location.pathname + location.search)
+  if (codeReturn && !saved)
+    for (const k of ['code', 'state', 'scope', 'authuser', 'prompt', 'hd', 'error', 'iss'])
+      q.delete(k)
+  const rest = q.toString()
+  history.replaceState(
+    null,
+    '',
+    saved?.path ?? location.pathname + (codeReturn ? (rest ? `?${rest}` : '') : location.search),
+  )
   if (!saved || p.get('state') !== saved.state || Date.now() - saved.at > 15 * 60_000) {
     // can't match it to a request from this app (e.g. iPhone came back in Safari instead of
     // the Home Screen app): never use such a token, but say so instead of failing silently
     redirectError =
       'Sign-in came back in a different window. Open DayNest from where you started (e.g. the Home Screen app) and try again.'
     return null
+  }
+  const code = codeReturn ? p.get('code') : null
+  if (code && saved.verifier) {
+    // swap the one-time code for the long sign-in; getToken() waits for it
+    exchanging = callTokenFn({
+      code,
+      verifier: saved.verifier,
+      redirectUri: `${location.origin}/`,
+    }).then((r) => {
+      if (!r.accessToken) throw new Error(`Google sign-in failed: ${r.error ?? r.status}`)
+      keep(r.accessToken, r.expiresIn)
+      if (r.refreshToken) write(REFRESH_KEY, r.refreshToken)
+      void rememberAccount(r.accessToken)
+      exchanging = null
+      return r.accessToken
+    })
+    exchanging.catch(() => undefined)
+    resumeAction = saved.next
+    return saved.next
   }
   const access = p.get('access_token')
   if (access) {
@@ -243,7 +421,9 @@ let pending: Promise<string> | null = null
 
 /** Load Google's script ahead of time so a tap can open the popup straight away. */
 export function prepareGoogle() {
-  if (CLIENT_ID && !redirectSignInNeeded()) void loadGis().catch(() => undefined)
+  if (!CLIENT_ID) return
+  void checkLongSignIn()
+  if (!redirectSignInNeeded()) void loadGis().catch(() => undefined)
 }
 
 /**
@@ -252,15 +432,32 @@ export function prepareGoogle() {
  * Google's page and comes back (`next` says what to carry on with).
  */
 export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Promise<string> {
-  if (hasToken()) return Promise.resolve(token!.value)
+  if (tokenValid()) return Promise.resolve(token!.value)
   if (!CLIENT_ID) return Promise.reject(new Error('Google sign-in is not set up'))
+  if (exchanging)
+    return exchanging.catch((e: unknown) => {
+      exchanging = null // shown once; the next tap starts again
+      throw e
+    })
+  if (refreshToken()) return refreshAccess(interactive, next)
+  // long sign-in available: one trip to Google's page on every phone, then never again
+  const long = read(LONG_KEY)
+  if (interactive && long === '1') return codeSignIn(next)
+  if (interactive && long == null && CLIENT_ID)
+    return checkLongSignIn().then((ok) => (ok ? codeSignIn(next) : legacyToken(true, next)))
+  return legacyToken(interactive, next)
+}
+
+/** Without the token function: Google's one-hour token (popup, or Google's page on iPhone). */
+function legacyToken(interactive: boolean, next: ResumeAction): Promise<string> {
+  if (tokenValid()) return Promise.resolve(token!.value)
   if (redirectSignInNeeded())
     return interactive ? redirectSignIn(next) : Promise.reject(new Error('Tap to sync'))
   if (pending) return pending
-  if (!window.google?.accounts?.oauth2) return loadGis().then(() => getToken(interactive, next))
+  if (!window.google?.accounts?.oauth2) return loadGis().then(() => legacyToken(interactive, next))
   pending = new Promise<string>((resolve, reject) => {
     const client = window.google!.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
+      client_id: CLIENT_ID!,
       scope: SCOPE,
       ...(accountHint() ? { login_hint: accountHint() } : {}),
       callback: (r) => {
@@ -291,7 +488,16 @@ export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Pro
 }
 
 export function signOutGoogle() {
-  if (token) window.google?.accounts.oauth2.revoke(token.value)
+  const long = refreshToken()
+  // revoking the long sign-in also ends its hour tokens
+  if (long)
+    void fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      mode: 'no-cors',
+      body: new URLSearchParams({ token: long }),
+    }).catch(() => undefined)
+  else if (token) window.google?.accounts.oauth2.revoke(token.value)
+  write(REFRESH_KEY, null)
   setToken(null)
 }
 

@@ -79,7 +79,7 @@ The server only stores your phone's push address and the minutes to wake it; nev
 
 Settings → **Family copy** signs in with Google straight from the phone and keeps an encrypted copy in a Sheet called "DayNest family (encrypted)" in your own Drive. On a new phone, tap **I have a family copy in Google** on the welcome screen and enter the family key code.
 
-- Encrypted on the phone before upload (AES-GCM; key from a 20-character family key code). Google sees only gibberish; there is no DayNest server.
+- Encrypted on the phone before upload (AES-GCM; key from a 20-character family key code). Google sees only gibberish. DayNest stores none of your data (its only server code is a tiny sign-in function that stores nothing).
 - DayNest asks only for `drive.file`: it can see the files it creates, not the rest of your Drive.
 - Nobody can reset the key code. Keep it written down; it's shown again in Settings on a signed-in phone.
 
@@ -90,6 +90,7 @@ One-time setup for the app owner (free, no card):
 3. **Google Auth Platform** (OAuth consent screen): External, app name DayNest, your email. Under **Data access** add the scope `.../auth/drive.file`. Under **Audience** choose **Publish app** (only a non-sensitive scope, so no review is needed).
 4. **Clients → Create client → Web application**. Authorized JavaScript origin: `https://daynestapp.vercel.app`. Authorized redirect URI: `https://daynestapp.vercel.app/` (iPhone/iPad sign in by redirect, not a popup). Copy the **Client ID**.
 5. Vercel → Settings → Environment Variables: `VITE_GOOGLE_CLIENT_ID` = that Client ID (public by design), then redeploy.
+6. **Stay signed in** (recommended): Google gives browser apps only 1-hour sign-ins. To sign in once per phone, add the client's **Client secret** in Vercel as `GOOGLE_CLIENT_SECRET` (no `VITE_` prefix, mark it **Sensitive**, Production) and redeploy. The tiny function `api/google-token.ts` uses it to swap Google's one-time code for a long-lived sign-in and to renew it; it stores and logs nothing, and only accepts requests from the app's own site (`ALLOWED_ORIGINS` adds more, comma-separated). Without it, the app falls back to the 1-hour sign-in. Never put the secret in the repository.
 
 ### Family sharing (optional): everyone with their own Google account
 

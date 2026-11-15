@@ -24,7 +24,7 @@ cleanupOutdatedCaches()
 // the public privacy/terms pages are plain pages, not the app
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    denylist: [/^\/(privacy|terms)\.html$/],
+    denylist: [/^\/(privacy|terms)\.html$/, /^\/api\//],
   }),
 )
 
