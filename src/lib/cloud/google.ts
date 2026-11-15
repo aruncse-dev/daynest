@@ -41,6 +41,8 @@ declare global {
           initTokenClient(c: {
             client_id: string
             scope: string
+            /** which Google account to use: skips the account picker when it's signed in */
+            login_hint?: string
             callback: (r: TokenResponse) => void
             error_callback?: (e: { type: string; message?: string }) => void
           }): TokenClient
@@ -67,6 +69,34 @@ let token: Token | null = (() => {
     return null
   }
 })()
+
+/**
+ * The Google account last used here. Passed to Google as a hint so it can go straight
+ * through (or at least pre-fill the email) instead of a fresh sign-in each time. That
+ * matters most on iPhone, where the Home Screen app has its own sign-in apart from Safari.
+ */
+const ACCOUNT_KEY = 'daynest.gaccount'
+const accountHint = (): string | undefined => {
+  try {
+    return localStorage.getItem(ACCOUNT_KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+/** Learn the account's email with the access DayNest already has (Drive "about"). */
+async function rememberAccount(accessToken: string) {
+  try {
+    const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const email = r.ok
+      ? ((await r.json()) as { user?: { emailAddress?: string } }).user?.emailAddress
+      : undefined
+    if (email) localStorage.setItem(ACCOUNT_KEY, email)
+  } catch {
+    /* only a convenience */
+  }
+}
 
 function setToken(t: Token | null) {
   token = t
@@ -134,6 +164,7 @@ function redirectSignIn(next: ResumeAction): Promise<never> {
     scope: SCOPE,
     include_granted_scopes: 'true',
     state,
+    ...(accountHint() ? { login_hint: accountHint()! } : {}),
   }).toString()
   location.assign(u.toString())
   leaving = new Promise<never>(() => undefined) // the page is leaving
@@ -160,6 +191,7 @@ export function consumeRedirect(): ResumeAction | null {
   const access = p.get('access_token')
   if (access) {
     setToken({ value: access, expiresAt: Date.now() + Number(p.get('expires_in') ?? 3600) * 1000 })
+    void rememberAccount(access)
     resumeAction = saved.next
     return saved.next
   }
@@ -207,12 +239,14 @@ export function getToken(interactive: boolean, next: ResumeAction = 'sync'): Pro
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
+      ...(accountHint() ? { login_hint: accountHint() } : {}),
       callback: (r) => {
         if (!r.access_token) {
           reject(new Error(r.error_description || r.error || 'Google sign-in was cancelled.'))
           return
         }
         setToken({ value: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
+        void rememberAccount(r.access_token)
         resolve(r.access_token)
       },
       error_callback: (e) => {
