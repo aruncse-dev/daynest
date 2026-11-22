@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from '@/db/actions'
 import { computeSlots } from './pushSchedule'
+import { withTimeout } from './timeout'
 
 /**
  * Always-on reminders via standard Web Push and a tiny free server (see /push).
@@ -49,7 +50,10 @@ async function device(): Promise<{ id: string; secret: string }> {
 }
 
 type GetRegistration = () => Promise<ServiceWorkerRegistration>
-const defaultRegistration: GetRegistration = () => navigator.serviceWorker.ready
+// `ready` never settles while no service worker is active (e.g. it failed to install), which
+// would leave "Turn on" spinning; give up after a while instead.
+const defaultRegistration: GetRegistration = () =>
+  withTimeout(navigator.serviceWorker.ready, 10_000, 'DayNest is still installing. Try again soon.')
 
 async function subscription(getReg: GetRegistration, create: boolean) {
   const reg = await getReg()

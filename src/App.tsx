@@ -13,6 +13,8 @@ import { CloudRunner } from '@/components/CloudCard'
 import { InviteHost, WhoAreYou } from '@/components/FamilyShare'
 import { familyConfigured } from '@/lib/cloud/google'
 import { Skeleton } from '@/components/ui'
+import { LaunchScreen, StillOpening } from '@/components/layout/StartupGate'
+import { useStartup, useTakingLong } from '@/components/layout/startup'
 import { Today } from '@/screens/Today'
 import { Setup } from '@/screens/Setup'
 
@@ -49,6 +51,10 @@ export default function App() {
     async () => (await db.settings.get(SETTING_ONBOARDED))?.value === true,
     [],
   )
+  // the database is open by now (StartupGate), so this first read should answer at once;
+  // if it doesn't, offer a way out instead of a launch screen that never goes away
+  const { restart } = useStartup()
+  const stuck = useTakingLong(onboarded === undefined)
 
   useEffect(() => {
     if (!onboarded) return
@@ -56,17 +62,7 @@ export default function App() {
     void migratePhoneFree().catch(() => undefined)
   }, [onboarded])
 
-  if (onboarded === undefined) {
-    return (
-      <div className="grid min-h-dvh place-items-center" aria-busy="true">
-        <img
-          src="/favicon.svg"
-          alt="Loading DayNest"
-          className="size-14 animate-pulse rounded-2xl"
-        />
-      </div>
-    )
-  }
+  if (onboarded === undefined) return stuck ? <StillOpening onRetry={restart} /> : <LaunchScreen />
 
   return (
     <BrowserRouter>
