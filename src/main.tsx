@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { ErrorBoundary } from './components/layout/ErrorBoundary'
-import { db } from './db/db'
+import { StartupGate } from './components/layout/StartupGate'
+import { openDb } from './db/open'
 import './lib/install'
 import { consumeRedirect } from './lib/cloud/google'
 import { consumeInviteFromUrl } from './lib/cloud/invite'
@@ -13,14 +14,16 @@ consumeRedirect()
 // opened a family invite link: keep it for the join screen
 consumeInviteFromUrl()
 
-db.open().catch((err: unknown) => {
-  console.error('Failed to open DayNest database', err)
-})
+// start opening the database right away; StartupGate waits for it (and recovers if it hangs
+// or fails, instead of leaving the launch screen up)
+openDb().catch(() => undefined)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <StartupGate>
+        <App />
+      </StartupGate>
     </ErrorBoundary>
   </StrictMode>,
 )

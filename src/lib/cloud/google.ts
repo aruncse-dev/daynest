@@ -10,6 +10,7 @@
  * token quietly from then on. No more signing in every hour. Without it: the hour token.
  */
 import type { CloudMeta, CloudRow, CloudStore } from './store'
+import { fetchWithTimeout } from '@/lib/timeout'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 const SCOPE = 'https://www.googleapis.com/auth/drive.file'
@@ -91,9 +92,10 @@ const accountHint = (): string | undefined => {
 /** Learn the account's email with the access DayNest already has (Drive "about"). */
 async function rememberAccount(accessToken: string) {
   try {
-    const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    const r = await fetchWithTimeout(
+      'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    )
     const email = r.ok
       ? ((await r.json()) as { user?: { emailAddress?: string } }).user?.emailAddress
       : undefined
@@ -202,7 +204,7 @@ export const hasToken = () => tokenValid() || !!refreshToken()
 let longCheck: Promise<boolean> | null = null
 /** Is the token function set up on this site? (asked once per start, remembered) */
 function checkLongSignIn(): Promise<boolean> {
-  longCheck ??= fetch(TOKEN_FN, { cache: 'no-store' })
+  longCheck ??= fetchWithTimeout(TOKEN_FN, { cache: 'no-store' }, 10_000)
     .then(async (r) => {
       const ok =
         r.ok &&
@@ -215,8 +217,10 @@ function checkLongSignIn(): Promise<boolean> {
   return longCheck
 }
 
+// Every call here has a time limit: a request that hangs (e.g. right after a cold launch) would
+// otherwise keep `refreshing` / `exchanging` / the sync lock busy until DayNest is relaunched.
 async function callTokenFn(body: object) {
-  const r = await fetch(TOKEN_FN, {
+  const r = await fetchWithTimeout(TOKEN_FN, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -580,10 +584,18 @@ export const NOT_REACHABLE = 'Family copy not reachable'
 
 async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const t = await getToken(false)
-  const res = await fetch(url, {
-    ...init,
-    headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json', ...init.headers },
-  })
+  const res = await fetchWithTimeout(
+    url,
+    {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${t}`,
+        'Content-Type': 'application/json',
+        ...init.headers,
+      },
+    },
+    30_000,
+  )
   if (res.status === 401) setToken(null)
   // the file is gone, or this Google setup (project) can't open it any more
   if (res.status === 404 && /spreadsheets\//.test(url)) throw new Error(NOT_REACHABLE)
@@ -737,7 +749,7 @@ export async function listShares(fileId: string): Promise<Share[]> {
 
 export async function unshare(fileId: string, permissionId: string) {
   const t = await getToken(false)
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://www.googleapis.com/drive/v3/files/${fileId}/permissions/${permissionId}`,
     { method: 'DELETE', headers: { Authorization: `Bearer ${t}` } },
   )
